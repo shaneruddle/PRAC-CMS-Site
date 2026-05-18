@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, getDocs, limit, orderBy } from 'firebase/firestore';
+import { collection, query, getDocs, getCountFromServer, limit, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -7,7 +7,7 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { 
   FileText, 
-  Car, 
+  BookOpen, 
   MapPin, 
   Clock, 
   Plus, 
@@ -23,7 +23,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const [stats, setStats] = useState({
     blogCount: { total: 0, published: 0 },
-    carCount: { total: 0, published: 0 },
+    guideCount: { total: 0, published: 0 },
     locationCount: { total: 0, published: 0 },
     lastDeploy: null as any
   });
@@ -34,13 +34,13 @@ export default function Dashboard() {
     async function fetchDashboardData() {
       try {
         const fetchBlogs = getDocs(collection(db, 'blog_posts')).catch(e => handleFirestoreError(e, OperationType.LIST, 'blog_posts'));
-        const fetchCars = getDocs(collection(db, 'cars')).catch(e => handleFirestoreError(e, OperationType.LIST, 'cars'));
+        const fetchGuides = getCountFromServer(collection(db, 'vehicle_guides'));
         const fetchLocations = getDocs(collection(db, 'locations')).catch(e => handleFirestoreError(e, OperationType.LIST, 'locations'));
         const fetchDeploys = getDocs(query(collection(db, 'deploy_triggers'), orderBy('triggeredAt', 'desc'), limit(1))).catch(e => handleFirestoreError(e, OperationType.LIST, 'deploy_triggers'));
 
-        const [blogSnap, carSnap, locationSnap, deploySnap] = await Promise.all([
+        const [blogSnap, guideSnap, locationSnap, deploySnap] = await Promise.all([
           fetchBlogs,
-          fetchCars,
+          fetchGuides,
           fetchLocations,
           fetchDeploys
         ]);
@@ -55,7 +55,7 @@ export default function Dashboard() {
 
         setStats({
           blogCount: getStats(blogSnap),
-          carCount: getStats(carSnap),
+          guideCount: { total: guideSnap.data().count, published: guideSnap.data().count },
           locationCount: getStats(locationSnap),
           lastDeploy: deploySnap.docs[0]?.data() || null
         });
@@ -63,7 +63,6 @@ export default function Dashboard() {
         // Simulating recent activity
         const activity = [
           ...blogSnap.docs.map(d => ({ ...d.data() as any, id: d.id, type: 'blog' })),
-          ...carSnap.docs.map(d => ({ ...d.data() as any, id: d.id, type: 'car' })),
           ...locationSnap.docs.map(d => ({ ...d.data() as any, id: d.id, type: 'location' }))
         ].sort((a: any, b: any) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0)).slice(0, 10);
         
@@ -80,7 +79,7 @@ export default function Dashboard() {
 
   const statCards = [
     { label: 'Blog Posts', stats: stats.blogCount, icon: FileText, color: 'text-blue-600', bg: 'bg-blue-100', link: '/blog' },
-    { label: 'Cars', stats: stats.carCount, icon: Car, color: 'text-green-600', bg: 'bg-green-100', link: '/cars' },
+    { label: 'Vehicle Guides', stats: stats.guideCount, icon: BookOpen, color: 'text-green-600', bg: 'bg-green-100', link: '/vehicle-guides' },
     { label: 'Locations', stats: stats.locationCount, icon: MapPin, color: 'text-purple-600', bg: 'bg-purple-100', link: '/locations' },
   ];
 
@@ -115,16 +114,16 @@ export default function Dashboard() {
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm transition-all hover:shadow-md">
           <div className="flex justify-between items-start mb-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Active Fleet</span>
-            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 text-[10px] rounded-full font-bold">{stats.carCount.total} Cars</span>
+            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 text-[10px] rounded-full font-bold">{stats.guideCount.total} Vehicle Guides</span>
           </div>
           <div className="flex items-end gap-2">
-            <h3 className="text-2xl font-bold text-slate-900">{stats.carCount.published}</h3>
+            <h3 className="text-2xl font-bold text-slate-900">{stats.guideCount.published}</h3>
             <span className="text-xs text-slate-500 mb-1">Available Now</span>
           </div>
           <div className="mt-3 w-full bg-slate-100 h-1 rounded-full overflow-hidden">
             <div 
               className="bg-emerald-500 h-full transition-all duration-1000" 
-              style={{ width: `${stats.carCount.total > 0 ? (stats.carCount.published / stats.carCount.total) * 100 : 0}%` }}
+              style={{ width: `${stats.guideCount.total > 0 ? (stats.guideCount.published / stats.guideCount.total) * 100 : 0}%` }}
             ></div>
           </div>
         </div>
@@ -194,7 +193,7 @@ export default function Dashboard() {
                     item.type === 'blog' ? "bg-blue-500" : item.type === 'car' ? "bg-emerald-500" : "bg-amber-500"
                   )}>
                     {item.type === 'blog' && <FileText size={16} />}
-                    {item.type === 'car' && <Car size={16} />}
+                    {item.type === 'car' && <BookOpen size={16} />}
                     {item.type === 'location' && <MapPin size={16} />}
                   </div>
                   <div className="flex-1">
@@ -238,9 +237,9 @@ export default function Dashboard() {
                 <ImageIcon size={20} />
                 <span className="text-[11px] font-bold">Media</span>
               </Link>
-              <Link to="/cars" className="flex flex-col items-center justify-center gap-2 p-4 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors">
-                <Car size={20} />
-                <span className="text-[11px] font-bold">Manage Cars</span>
+              <Link to="/vehicle-guides" className="flex flex-col items-center justify-center gap-2 p-4 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors">
+                <BookOpen size={20} />
+                <span className="text-[11px] font-bold">Manage Vehicle Guides</span>
               </Link>
               <button 
                 onClick={() => window.open('https://pattayarentacar.com', '_blank')}
