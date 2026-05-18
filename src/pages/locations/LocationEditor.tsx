@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { Save, Globe, ArrowLeft, Loader2, Plus, Trash2 } from 'lucide-react';
 import { RichTextEditor } from '@/components/editor/RichTextEditor';
 import { LanguageSwitcher, LANGUAGES } from '@/components/editor/LanguageSwitcher';
-import { Location, Translation, Car } from '@/types';
+import { Location, Translation, WebsiteCar } from '@/types';
 import { cn } from '@/lib/utils';
 
 export default function LocationEditor() {
@@ -20,7 +20,7 @@ export default function LocationEditor() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [currentLang, setCurrentLang] = useState('en');
-  const [cars, setCars] = useState<Car[]>([]);
+  const [websiteCars, setWebsiteCars] = useState<WebsiteCar[]>([]);
 
   const [formData, setFormData] = useState<Partial<Location>>({
     slug: '',
@@ -36,13 +36,13 @@ export default function LocationEditor() {
       try {
         const [locSnap, carsSnap] = await Promise.all([
           getDoc(doc(db, 'locations', slug!)),
-          getDocs(query(collection(db, 'cars'), orderBy('make')))
+          getDocs(query(collection(db, 'website_cars'), orderBy('name')))
         ]);
 
         if (locSnap.exists()) {
           setFormData(locSnap.data() as Location);
         }
-        setCars(carsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Car[]);
+        setWebsiteCars(carsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as WebsiteCar[]);
       } catch (error) {
         toast.error('Error loading data');
       } finally {
@@ -285,27 +285,26 @@ export default function LocationEditor() {
             <CardContent className="p-4 space-y-3">
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mb-2">Select cars to feature in this area:</p>
               <div className="space-y-1 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                {cars.map(car => (
+                {websiteCars.map(car => (
                   <label key={car.id} className={cn(
                     "flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-all border",
-                    formData.featuredCarIds?.includes(car.slug) 
+                    formData.featuredCarIds?.includes(car.id!) 
                       ? "bg-blue-50/50 border-blue-100 text-blue-700" 
                       : "hover:bg-slate-50 border-transparent text-slate-600"
                   )}>
                     <input 
                       type="checkbox"
                       className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                      checked={formData.featuredCarIds?.includes(car.slug)}
+                      checked={formData.featuredCarIds?.includes(car.id!)}
                       onChange={(e) => {
                         const ids = e.target.checked 
-                          ? [...(formData.featuredCarIds || []), car.slug]
-                          : (formData.featuredCarIds || []).filter(id => id !== car.slug);
+                          ? [...(formData.featuredCarIds || []), car.id!]
+                          : (formData.featuredCarIds || []).filter(id => id !== car.id!);
                         setFormData(prev => ({ ...prev, featuredCarIds: ids }));
                       }}
                     />
                     <div className="flex flex-col">
-                      <span className="text-xs font-bold leading-none">{car.make} {car.model}</span>
-                      <span className="text-[9px] uppercase tracking-wider opacity-60">{car.year} • {car.category}</span>
+                      <span className="text-xs font-bold leading-none">{car.name}</span>
                     </div>
                   </label>
                 ))}
