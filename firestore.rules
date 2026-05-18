@@ -1,0 +1,125 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == "info@pattayarentacar.com" ||
+        request.auth.token.admin == true || 
+        exists(/databases/$(database)/documents/admin_users/$(request.auth.uid))
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Validation Helpers ---
+
+    function isValidCommonStatus(data) {
+      return data.status in ['draft', 'published'];
+    }
+
+    function isValidBlogPost(data) {
+      return data.keys().hasAll(['slug', 'status', 'translations']) &&
+             data.slug is string && data.slug.size() <= 100 &&
+             isValidCommonStatus(data) &&
+             data.translations is map;
+    }
+
+    function isValidLocation(data) {
+      return data.keys().hasAll(['slug', 'status']) &&
+             data.slug is string && data.slug.size() <= 100 &&
+             isValidCommonStatus(data);
+    }
+
+    function isValidCar(data) {
+      return data.keys().hasAll(['slug', 'status', 'make', 'model']) &&
+             data.slug is string && data.slug.size() <= 100 &&
+             isValidCommonStatus(data) &&
+             data.make is string && data.make.size() <= 50 &&
+             data.model is string && data.model.size() <= 50;
+    }
+
+    function isValidFAQ(data) {
+      return data.keys().hasAll(['category', 'status']) &&
+             data.category is string &&
+             isValidCommonStatus(data);
+    }
+
+    // --- Rules ---
+
+    // Blog Posts
+    match /blog_posts/{slug} {
+      allow read: if (existing().status == 'published') || isAdmin();
+      allow create: if isAdmin() && isValidId(slug) && isValidBlogPost(incoming()) && incoming().createdAt == request.time;
+      allow update: if isAdmin() && isValidBlogPost(incoming()) && incoming().updatedAt == request.time;
+      allow delete: if isAdmin();
+    }
+
+    // Locations
+    match /locations/{slug} {
+      allow read: if (existing().status == 'published') || isAdmin();
+      allow create: if isAdmin() && isValidId(slug) && isValidLocation(incoming()) && incoming().createdAt == request.time;
+      allow update: if isAdmin() && isValidLocation(incoming()) && incoming().updatedAt == request.time;
+      allow delete: if isAdmin();
+    }
+
+    // Cars
+    match /cars/{slug} {
+      allow read: if (existing().status == 'published') || isAdmin();
+      allow create: if isAdmin() && isValidId(slug) && isValidCar(incoming()) && incoming().createdAt == request.time;
+      allow update: if isAdmin() && isValidCar(incoming()) && incoming().updatedAt == request.time;
+      allow delete: if isAdmin();
+    }
+
+    // FAQs
+    match /faqs/{id} {
+      allow read: if (existing().status == 'published') || isAdmin();
+      allow create: if isAdmin() && isValidId(id) && isValidFAQ(incoming()) && incoming().createdAt == request.time;
+      allow update: if isAdmin() && isValidFAQ(incoming()) && incoming().updatedAt == request.time;
+      allow delete: if isAdmin();
+    }
+
+    // Site Config
+    match /settings/site_config {
+      allow read: if true; // Publicly readable for marketing site
+      allow write: if isAdmin();
+    }
+
+    // Admin Users
+    match /admin_users/{uid} {
+      allow read: if isAdmin() || (request.auth.uid == uid);
+      allow write: if isAdmin(); // Only admins can manage other admins
+    }
+
+    // Deploy Triggers
+    match /deploy_triggers/{id} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidId(id);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Pattaya Rent A Car CMS",
+  "description": "Content Management System for Pattaya Rent A Car marketing site, managing blogs, cars, locations, and FAQs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

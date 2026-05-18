@@ -1,0 +1,145 @@
+{
+  "entities": {
+    "BlogPost": {
+      "title": "Blog Post",
+      "description": "A blog post for the marketing site",
+      "type": "object",
+      "properties": {
+        "slug": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "published"] },
+        "publishedAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "author": { "type": "string" },
+        "category": { "type": "string" },
+        "featuredImage": { "type": "string" },
+        "translations": { "type": "object" },
+        "seo": { "type": "object" }
+      },
+      "required": ["slug", "status", "translations"]
+    },
+    "Location": {
+      "title": "Location",
+      "description": "A pre-defined area in Pattaya",
+      "type": "object",
+      "properties": {
+        "slug": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "published"] },
+        "displayOrder": { "type": "number" },
+        "heroImage": { "type": "string" },
+        "mapEmbedUrl": { "type": "string" },
+        "translations": { "type": "object" },
+        "nearbyAreas": { "type": "array" },
+        "featuredCarIds": { "type": "array" },
+        "seo": { "type": "object" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["slug", "status"]
+    },
+    "Car": {
+      "title": "Car",
+      "description": "A rental car entry",
+      "type": "object",
+      "properties": {
+        "slug": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "published"] },
+        "displayOrder": { "type": "number" },
+        "make": { "type": "string" },
+        "model": { "type": "string" },
+        "year": { "type": "number" },
+        "category": { "type": "string" },
+        "images": { "type": "array" },
+        "specs": { "type": "object" },
+        "translations": { "type": "object" },
+        "available": { "type": "boolean" },
+        "seo": { "type": "object" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["slug", "status", "make", "model"]
+    },
+    "FAQ": {
+      "title": "FAQ",
+      "description": "Frequently Asked Question",
+      "type": "object",
+      "properties": {
+        "category": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "published"] },
+        "displayOrder": { "type": "number" },
+        "translations": { "type": "object" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["category", "status"]
+    },
+    "SiteConfig": {
+      "title": "Site Config",
+      "description": "Global settings for the site",
+      "type": "object",
+      "properties": {
+        "contactPhone": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "lineId": { "type": "string" },
+        "email": { "type": "string" },
+        "officeAddress": { "type": "string" },
+        "businessHours": { "type": "string" },
+        "trustSignals": { "type": "object" },
+        "socialLinks": { "type": "object" }
+      }
+    },
+    "AdminUser": {
+      "title": "Admin User",
+      "description": "Metadata for admin users",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "lastLogin": { "type": "string" }
+      }
+    },
+    "DeployTrigger": {
+      "title": "Deploy Trigger",
+      "description": "A trigger for marketing site rebuild",
+      "type": "object",
+      "properties": {
+        "triggeredAt": { "type": "string" },
+        "triggeredBy": { "type": "string" },
+        "status": { "type": "string" },
+        "changedCollection": { "type": "string" },
+        "changedDocId": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "blog_posts/{slug}": {
+      "schema": "BlogPost",
+      "description": "Blog posts collection"
+    },
+    "locations/{slug}": {
+      "schema": "Location",
+      "description": "Locations collection"
+    },
+    "cars/{slug}": {
+      "schema": "Car",
+      "description": "Cars collection"
+    },
+    "faqs/{id}": {
+      "schema": "FAQ",
+      "description": "FAQs collection"
+    },
+    "settings/site_config": {
+      "schema": "SiteConfig",
+      "description": "Global settings"
+    },
+    "admin_users/{uid}": {
+      "schema": "AdminUser",
+      "description": "Admin users collection"
+    },
+    "deploy_triggers/{id}": {
+      "schema": "DeployTrigger",
+      "description": "Deploy triggers collection"
+    }
+  }
+}
