@@ -12,6 +12,7 @@ export interface Translation {
   answer?: string;
   description?: string;
   longDescription?: string;
+  alternativeRationale?: string;
   faqs?: { question: string; answer: string }[];
 }
 
