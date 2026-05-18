@@ -1,13 +1,13 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  FileText, 
-  MapPin, 
-  Car, 
-  HelpCircle, 
-  Settings, 
-  Image as ImageIcon, 
+import {
+  LayoutDashboard,
+  FileText,
+  MapPin,
+  BookOpen,
+  HelpCircle,
+  Settings,
+  Image as ImageIcon,
   CloudUpload,
   LogOut,
   ChevronLeft,
@@ -22,7 +22,7 @@ const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
   { icon: FileText, label: 'Blog Posts', path: '/blog' },
   { icon: MapPin, label: 'Locations', path: '/locations' },
-  { icon: Car, label: 'Cars', path: '/cars' },
+  { icon: BookOpen, label: 'Vehicle Guides', path: '/vehicle-guides' },
   { icon: HelpCircle, label: 'FAQs', path: '/faqs' },
   { icon: ImageIcon, label: 'Media Library', path: '/media' },
   { icon: Settings, label: 'Site Settings', path: '/settings' },
@@ -79,9 +79,9 @@ export function Sidebar({ collapsed, setCollapsed }: { collapsed: boolean, setCo
       </nav>
 
       <div className="p-4 border-t border-zinc-800 flex flex-col gap-2">
-        <Button 
-          variant="ghost" 
-          size="icon" 
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={() => setCollapsed(!collapsed)}
           className="w-full justify-center h-8 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors border border-transparent hover:border-zinc-700"
         >
