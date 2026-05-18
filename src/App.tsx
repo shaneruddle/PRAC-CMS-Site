@@ -10,8 +10,8 @@ const BlogList = lazy(() => import('./pages/blog/BlogList'));
 const BlogEditor = lazy(() => import('./pages/blog/BlogEditor'));
 const LocationList = lazy(() => import('./pages/locations/LocationList'));
 const LocationEditor = lazy(() => import('./pages/locations/LocationEditor'));
-const CarList = lazy(() => import('./pages/cars/CarList'));
-const CarEditor = lazy(() => import('./pages/cars/CarEditor'));
+const VehicleGuideList = lazy(() => import('./pages/vehicle-guides/VehicleGuideList'));
+const VehicleGuideEditor = lazy(() => import('./pages/vehicle-guides/VehicleGuideEditor'));
 const FaqList = lazy(() => import('./pages/faqs/FaqList'));
 const FaqEditor = lazy(() => import('./pages/faqs/FaqEditor'));
 const Settings = lazy(() => import('./pages/Settings'));
@@ -56,14 +56,14 @@ export default function App() {
               <Suspense fallback={<LoadingScreen />}><LocationEditor /></Suspense>
             } />
 
-            <Route path="/cars" element={
-              <Suspense fallback={<LoadingScreen />}><CarList /></Suspense>
+            <Route path="/vehicle-guides" element={
+                            <Suspense fallback={<LoadingScreen />}><VehicleGuideList /></Suspense>
             } />
-            <Route path="/cars/new" element={
-              <Suspense fallback={<LoadingScreen />}><CarEditor /></Suspense>
+            <Route path="/vehicle-guides/new" element={
+                            <Suspense fallback={<LoadingScreen />}><VehicleGuideEditor /></Suspense>
             } />
-            <Route path="/cars/:slug" element={
-              <Suspense fallback={<LoadingScreen />}><CarEditor /></Suspense>
+            <Route path="/vehicle-guides/:slug" element={
+                            <Suspense fallback={<LoadingScreen />}><VehicleGuideEditor /></Suspense>
             } />
 
             <Route path="/faqs" element={
