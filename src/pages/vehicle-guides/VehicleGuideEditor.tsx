@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { db, storage, auth } from '@/lib/firebase';
+import { db, storage } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -172,13 +172,6 @@ export default function VehicleGuideEditor() {
       await setDoc(doc(db, 'vehicle_guides', formData.slug!), data);
 
       if (status === 'published') {
-        await setDoc(doc(collection(db, 'deploy_triggers')), {
-          triggeredAt: serverTimestamp(),
-          triggeredBy: auth.currentUser?.email,
-          status: 'queued',
-          changedCollection: 'vehicle_guides',
-          changedDocId: formData.slug
-        });
         toast.success('Guide published and deploy triggered');
       } else {
         toast.success('Guide saved as draft');
