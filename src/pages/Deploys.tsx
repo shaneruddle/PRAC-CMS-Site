@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, getDocs, orderBy, limit, onSnapshot, doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db, auth } from '@/lib/firebase';
+import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-errors';
 import { 
   Table, 
@@ -45,15 +46,12 @@ export default function Deploys() {
 
   const triggerManualDeploy = async () => {
     try {
-      await setDoc(doc(collection(db, 'deploy_triggers')), {
-        triggeredAt: serverTimestamp(),
-        triggeredBy: auth.currentUser?.email || 'Admin',
-        status: 'queued',
-        changedCollection: 'manual',
-        changedDocId: 'manual-trigger'
-      });
-      toast.success('Manual deploy triggered');
+      const functions = getFunctions(undefined, 'asia-southeast1');
+      const manualDeployFn = httpsCallable(functions, 'manualDeploy');
+      await manualDeployFn({});
+      toast.success('Deploy triggered successfully');
     } catch (error) {
+      console.error('Deploy trigger failed:', error);
       toast.error('Failed to trigger deploy');
     }
   };
