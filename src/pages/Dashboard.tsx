@@ -77,11 +77,6 @@ export default function Dashboard() {
     fetchDashboardData();
   }, []);
 
-  const statCards = [
-    { label: 'Blog Posts', stats: stats.blogCount, icon: FileText, color: 'text-blue-600', bg: 'bg-blue-100', link: '/blog' },
-    { label: 'Vehicle Guides', stats: stats.guideCount, icon: BookOpen, color: 'text-green-600', bg: 'bg-green-100', link: '/vehicle-guides' },
-    { label: 'Locations', stats: stats.locationCount, icon: MapPin, color: 'text-purple-600', bg: 'bg-purple-100', link: '/locations' },
-  ];
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -110,10 +105,13 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Fleet Stats */}
+        {/* Vehicle Guides Stats */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm transition-all hover:shadow-md">
           <div className="flex justify-between items-start mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Active Fleet</span>
+            <div className="flex items-center gap-1.5">
+              <BookOpen className="w-3.5 h-3.5 text-green-600" />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Vehicle Guides</span>
+            </div>
             <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 text-[10px] rounded-full font-bold">{stats.guideCount.total} Vehicle Guides</span>
           </div>
           <div className="flex items-end gap-2">
