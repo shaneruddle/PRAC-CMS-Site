@@ -55,7 +55,7 @@ export interface Location {
   createdAt: any;
 }
 
-export interface Car {
+export interface VehicleGuide {
   id?: string;
   slug: string;
   status: Status;
@@ -64,7 +64,8 @@ export interface Car {
   model: string;
   year: number;
   category: 'sedan' | 'suv' | 'pickup' | 'hatchback' | 'premium' | 'economy';
-  images: string[];
+  heroImage: string;
+  gallery: string[];
   specs: {
     seats: number;
     transmission: 'automatic' | 'manual';
@@ -72,14 +73,25 @@ export interface Car {
     luggage: string;
     features: string[];
   };
+  featuredCarIds: string[];
   translations: Record<string, Translation>;
-  available: boolean;
   seo: {
     metaTitle?: string;
     metaDescription?: string;
+    ogImage?: string;
+    canonicalUrl?: string;
+    noIndex?: boolean;
   };
   updatedAt: any;
   createdAt: any;
+}
+
+export interface WebsiteCar {
+  id?: string;
+  name: string;
+  priceGridVehicle?: string;
+  mainImage?: string;
+  isActive?: boolean;
 }
 
 export interface FAQ {
