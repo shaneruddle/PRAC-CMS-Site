@@ -1,73 +1,130 @@
-import * as functions from "firebase-functions";
+import { onDocumentWritten } from "firebase-functions/v2/firestore";
+import { defineSecret } from "firebase-functions/params";
+import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
+import { dispatchGitHubBuild } from "./githubDispatch";
 
-admin.initializeApp();
+const githubPat = defineSecret("GITHUB_PAT");
 
-/**
- * Triggered when a new document is created in 'deploy_triggers' collection.
- * This function orchestrates the rebuild and redeploy of the static marketing site.
- */
-export const onDeployTrigger = functions.firestore
-  .document("deploy_triggers/{triggerId}")
-  .onCreate(async (snap, context) => {
-    const trigger = snap.data();
-    const triggerRef = snap.ref;
-
-    try {
-      // 1. Update status to 'building'
-      await triggerRef.update({
-        status: "building",
-        startedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-
-      console.log(`Starting build for ${trigger.changedCollection}/${trigger.changedDocId}`);
-
-      // TODO: IMPLEMENT ACTUAL REBUILD LOGIC
-      // 1. Fetch all published data from Firestore
-      // 2. Feed data into a Static Site Generator (e.g., Next.js, Hugo, Jekyll)
-      // 3. Generate HTML/CSS/JS files
-      // 4. Upload files to Firebase Hosting using the Firebase Hosting REST API
-      //    or a CI/CD integration.
-      
-      // Simulating build time
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-
-      // 2. Update status to 'deployed'
-      await triggerRef.update({
-        status: "deployed",
-        completedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-
-      console.log("Deploy successful");
-    } catch (error) {
-      console.error("Deploy failed:", error);
-      
-      // 3. Update status to 'failed'
-      await triggerRef.update({
-        status: "failed",
-        error: error instanceof Error ? error.message : String(error),
-        completedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-    }
-  });
+// Ensure Admin SDK is initialized (idempotent)
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
 
 /**
- * Manual trigger for rebuild (e.g., from settings change)
+ * Determines whether a Firestore document write should trigger a marketing site rebuild.
+ *
+ * Dispatch conditions:
+ *   - Newly created with status='published'
+ *   - Status changed to 'published' (draft -> published)
+ *   - Edit to an already-published doc (published -> published)
+ *   - Unpublish of a published doc (published -> draft)
+ *   - Delete of a published doc (published -> nothing)
+ *
+ * No dispatch for:
+ *   - Draft saves (draft -> draft, new as draft)
+ *   - Delete of a draft doc
  */
-export const manualDeploy = functions.https.onCall(async (data, context) => {
-  // Verify admin role 
-  if (!context.auth?.token.admin) {
-    throw new functions.https.HttpsError("permission-denied", "Only admins can trigger deploys.");
+function shouldDispatch(
+  before: admin.firestore.DocumentSnapshot | undefined,
+  after: admin.firestore.DocumentSnapshot | undefined
+): boolean {
+  const beforePublished = before?.exists && before.data()?.status === "published";
+  const afterPublished = after?.exists && after.data()?.status === "published";
+
+  if (beforePublished && afterPublished) {
+    // Edit to an already-published doc — dispatch on any field change
+    return true;
   }
+  if (beforePublished || afterPublished) {
+    // One side is published: covers publish, unpublish, delete-of-published, create-as-published
+    return true;
+  }
+  // Both draft/missing — no dispatch
+  return false;
+}
 
-  const triggerRef = admin.firestore().collection("deploy_triggers").doc();
-  await triggerRef.set({
-    triggeredAt: admin.firestore.FieldValue.serverTimestamp(),
-    triggeredBy: context.auth.token.email,
-    status: "queued",
-    changedCollection: "manual",
-    changedDocId: "manual-rebuild"
-  });
+/**
+ * Firestore trigger: fires when a vehicle_guides document is written.
+ * Dispatches a cms_publish event to the marketing site repo when status transitions
+ * affect published content.
+ */
+export const onVehicleGuideWrite = onDocumentWritten(
+  {
+    document: "vehicle_guides/{slug}",
+    region: "asia-southeast1",
+    secrets: [githubPat],
+  },
+  async (event) => {
+    const slug = event.params.slug;
+    const before = event.data?.before;
+    const after = event.data?.after;
 
-  return { triggerId: triggerRef.id };
-});
+    logger.info(`[onVehicleGuideWrite] Write detected`, {
+      slug,
+      beforeStatus: before?.data()?.status ?? "(none)",
+      afterStatus: after?.data()?.status ?? "(deleted)",
+    });
+
+    if (!shouldDispatch(before, after)) {
+      logger.info(`[onVehicleGuideWrite] No dispatch needed (draft-only change)`, { slug });
+      return;
+    }
+
+    const pat = githubPat.value();
+    if (!pat) {
+      logger.error("[onVehicleGuideWrite] GITHUB_PAT secret is not set");
+      return;
+    }
+
+    await dispatchGitHubBuild(
+      {
+        source: `vehicle_guides/${slug}`,
+        triggeredBy: "auto",
+      },
+      pat
+    );
+  }
+);
+
+/**
+ * Firestore trigger: fires when a locations document is written.
+ * Same dispatch logic as onVehicleGuideWrite.
+ */
+export const onLocationWrite = onDocumentWritten(
+  {
+    document: "locations/{slug}",
+    region: "asia-southeast1",
+    secrets: [githubPat],
+  },
+  async (event) => {
+    const slug = event.params.slug;
+    const before = event.data?.before;
+    const after = event.data?.after;
+
+    logger.info(`[onLocationWrite] Write detected`, {
+      slug,
+      beforeStatus: before?.data()?.status ?? "(none)",
+      afterStatus: after?.data()?.status ?? "(deleted)",
+    });
+
+    if (!shouldDispatch(before, after)) {
+      logger.info(`[onLocationWrite] No dispatch needed (draft-only change)`, { slug });
+      return;
+    }
+
+    const pat = githubPat.value();
+    if (!pat) {
+      logger.error("[onLocationWrite] GITHUB_PAT secret is not set");
+      return;
+    }
+
+    await dispatchGitHubBuild(
+      {
+        source: `locations/${slug}`,
+        triggeredBy: "auto",
+      },
+      pat
+    );
+  }
+);
