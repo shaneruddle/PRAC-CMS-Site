@@ -52,4 +52,5 @@ jobs:
         run: |
           firebase deploy --only functions \
             --project pattaya-rent-a-car-rebuild \
-            --non-interactive
+            --non-interactive \
+            --force
