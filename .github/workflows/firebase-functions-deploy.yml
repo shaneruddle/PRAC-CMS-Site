@@ -8,6 +8,16 @@ on:
       - 'functions/**'
   workflow_dispatch:
 
+# Secret Manager IAM choices (Phase 3e):
+# Deploy SA: firebase-adminsdk-fbsvc@pattaya-rent-a-car-rebuild.iam.gserviceaccount.com
+#   - Secret Manager Admin         (setIamPolicy during deploy — auto-grants compute SA)
+#   - Secret Manager Viewer        (secrets.get metadata read during deploy)
+#   - Secret Manager Secret Accessor (versions.access)
+# Runtime SA: 700448424476-compute@developer.gserviceaccount.com
+#   - Secret Manager Secret Accessor (project-level, inherited — for runtime secret reads)
+# All deploy SA grants are scoped to GITHUB_PAT secret only, not project-level.
+# Phase 7 polish: consolidate into one role grant if feasible.
+
 jobs:
   deploy_functions:
     runs-on: ubuntu-latest
