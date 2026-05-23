@@ -104,29 +104,6 @@ export interface FAQ {
   createdAt: any;
 }
 
-export interface SiteConfig {
-  contactPhone: string;
-  whatsapp: string;
-  lineId: string;
-  email: string;
-  officeAddress: string;
-  businessHours: string;
-  trustSignals: {
-    yearsInBusiness: string;
-    customersServed: string;
-    googleRating: string;
-    googleReviewCount: string;
-    facebookRating: string;
-    facebookReviewCount: string;
-  };
-  socialLinks: {
-    facebook: string;
-    instagram: string;
-    tiktok: string;
-    youtube: string;
-  };
-}
-
 export interface DeployTrigger {
   id?: string;
   triggeredAt: any;

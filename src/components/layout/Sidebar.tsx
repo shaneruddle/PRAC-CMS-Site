@@ -6,7 +6,6 @@ import {
   MapPin,
   BookOpen,
   HelpCircle,
-  Settings,
   Image as ImageIcon,
   CloudUpload,
   LogOut,
@@ -25,7 +24,6 @@ const navItems = [
   { icon: BookOpen, label: 'Vehicle Guides', path: '/vehicle-guides' },
   { icon: HelpCircle, label: 'FAQs', path: '/faqs' },
   { icon: ImageIcon, label: 'Media Library', path: '/media' },
-  { icon: Settings, label: 'Site Settings', path: '/settings' },
   { icon: CloudUpload, label: 'Deploys', path: '/deploys' },
 ];
 
