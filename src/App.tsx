@@ -14,7 +14,6 @@ const VehicleGuideList = lazy(() => import('./pages/vehicle-guides/VehicleGuideL
 const VehicleGuideEditor = lazy(() => import('./pages/vehicle-guides/VehicleGuideEditor'));
 const FaqList = lazy(() => import('./pages/faqs/FaqList'));
 const FaqEditor = lazy(() => import('./pages/faqs/FaqEditor'));
-const Settings = lazy(() => import('./pages/Settings'));
 const Media = lazy(() => import('./pages/Media'));
 const Deploys = lazy(() => import('./pages/Deploys'));
 const Logs = lazy(() => import('./pages/Logs'));
@@ -76,9 +75,6 @@ export default function App() {
               <Suspense fallback={<LoadingScreen />}><FaqEditor /></Suspense>
             } />
 
-            <Route path="/settings" element={
-              <Suspense fallback={<LoadingScreen />}><Settings /></Suspense>
-            } />
             <Route path="/media" element={
               <Suspense fallback={<LoadingScreen />}><Media /></Suspense>
             } />
