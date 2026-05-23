@@ -129,10 +129,6 @@
       "schema": "FAQ",
       "description": "FAQs collection"
     },
-    "settings/site_config": {
-      "schema": "SiteConfig",
-      "description": "Global settings"
-    },
     "admin_users/{uid}": {
       "schema": "AdminUser",
       "description": "Admin users collection"
