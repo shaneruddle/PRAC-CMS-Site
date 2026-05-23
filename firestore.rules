@@ -101,13 +101,6 @@ service cloud.firestore {
       allow update: if isAdmin() && isValidFAQ(incoming()) && incoming().updatedAt == request.time;
       allow delete: if isAdmin();
     }
-
-    // Site Config
-    match /settings/site_config {
-      allow read: if true; // Publicly readable for marketing site
-      allow write: if isAdmin();
-    }
-
     // Admin Users
     match /admin_users/{uid} {
       allow read: if isAdmin() || (request.auth.uid == uid);
