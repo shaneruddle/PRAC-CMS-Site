@@ -42,7 +42,8 @@ export default function BlogEditor() {
                       const querySnap = await getDocs(q);
                       if (!querySnap.empty) {
                                       const docSnap = querySnap.docs[0];
-                                      setFormData({ id: docSnap.id, ...docSnap.data() } as BlogPost);
+                        const _d = docSnap.data() as any; const _t = _d.translations || {}; if (_d.title && !(_t.en && _t.en.title)) { _t.en = Object.assign({}, _t.en || {}, { title: _d.title, body: _d.content || '' }); }
+                                      setFormData({ id: docSnap.id, ..._d, translations: _t } as BlogPost);
                       } else {
                                       toast.error('Post not found');
                                       navigate('/blog');
