@@ -123,7 +123,7 @@ export default function BlogList() {
                 <TableRow key={post.slug} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors group">
                   <TableCell className="px-6 py-4">
                     <div className="flex flex-col">
-                      <span className="font-semibold text-slate-900 group-hover:text-blue-600 transition-colors uppercase text-xs tracking-tight">{post.translations?.en?.title || 'Untitled'}</span>
+                                                  <span className="font-semibold text-slate-900 group-hover:text-blue-600 transition-colors uppercase text-xs tracking-tight">{post.translations?.en?.title || (post as any).title || 'Untitled'}</span>
                       <span className="text-[10px] font-mono text-slate-400 mt-0.5">/blog/{post.slug}</span>
                     </div>
                   </TableCell>
