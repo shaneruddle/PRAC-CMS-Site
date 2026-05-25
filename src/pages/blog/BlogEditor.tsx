@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, setDoc, serverTimestamp, collection } from 'firebase/firestore';
+import { doc, getDoc, getDocs, setDoc, serverTimestamp, collection, query, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { Save, Globe, ArrowLeft, Image as ImageIcon, Eye, Trash2, Loader2, Plus } from 'lucide-react';
-import { RichTextEditor } from '@/components/editor/RichTextEditor';
+import { RichTextEditor } from '@/components/editor/RichTextEdtor';
 import { LanguageSwitcher, LANGUAGES } from '@/components/editor/LanguageSwitcher';
 import { BlogPost, Translation } from '@/types';
 import { cn } from '@/lib/utils';
@@ -38,14 +38,15 @@ export default function BlogEditor() {
     if (existingSlug) {
       async function fetchPost() {
         try {
-          const docRef = doc(db, 'blog_posts', existingSlug!);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            setFormData(docSnap.data() as BlogPost);
-          } else {
-            toast.error('Post not found');
-            navigate('/blog');
-          }
+            const q = query(collection(db, 'blog_posts'), where('slug', '==', existingSlug));
+                      const querySnap = await getDocs(q);
+                      if (!querySnap.empty) {
+                                      const docSnap = querySnap.docs[0];
+                                      setFormData({ id: docSnap.id, ...docSnap.data() } as BlogPost);
+                      } else {
+                                      toast.error('Post not found');
+                                      navigate('/blog');
+                      }
         } catch (error) {
           toast.error('Error fetching post');
         } finally {
@@ -97,7 +98,7 @@ export default function BlogEditor() {
 
   const savePost = async (statusOverride?: 'draft' | 'published') => {
     if (!formData.slug) return toast.error('Slug is required');
-    if (!formData.translations?.en?.title) return toast.error('English title is required');
+        if (!formData.translations?.en?.title && !(formData as any).title) return toast.error('English title is required');
 
     setSaving(true);
     const status = statusOverride || formData.status;
@@ -112,7 +113,8 @@ export default function BlogEditor() {
         publishedAt: status === 'published' && !formData.publishedAt ? serverTimestamp() : formData.publishedAt || null
       };
 
-      await setDoc(doc(db, 'blog_posts', formData.slug!), data);
+      const docId = !isNew && (formData as any).id ? (formData as any).id : formData.slug!;
+            await setDoc(doc(db, 'blog_posts', docId), data);
       
       if (status === 'published') {
         // Trigger deploy
