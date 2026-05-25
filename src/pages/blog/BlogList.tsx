@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge'
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -141,7 +141,7 @@ export default function BlogList() {
                   </TableCell>
                   <TableCell className="py-4">
                     <span className="text-xs text-slate-500">
-                      {post.updatedAt ? format(post.updatedAt.toDate(), 'MMM d, yyyy') : 'Recently'}
+                      {post.updatedAt ? format(post.updatedAt?.toDate ? post.updatedAt.toDate() : new Date(post.updatedAt), 'MMM d, yyyy') : 'Recently'}
                     </span>
                   </TableCell>
                   <TableCell className="px-6 py-4 text-right">
