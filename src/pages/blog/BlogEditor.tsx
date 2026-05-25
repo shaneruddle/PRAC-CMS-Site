@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { Save, Globe, ArrowLeft, Image as ImageIcon, Eye, Trash2, Loader2, Plus } from 'lucide-react';
-import { RichTextEditor } from '@/components/editor/RichTextEdtor';
+import { RichTextEditor } from '@/components/editor/RichTextEditor';
 import { LanguageSwitcher, LANGUAGES } from '@/components/editor/LanguageSwitcher';
 import { BlogPost, Translation } from '@/types';
 import { cn } from '@/lib/utils';
