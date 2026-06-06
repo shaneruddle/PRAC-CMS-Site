@@ -112,3 +112,47 @@ export interface DeployTrigger {
   changedCollection: string;
   changedDocId: string;
 }
+
+export interface HotelAttraction {
+  name: string;
+  distanceKm: number;
+}
+
+export interface Hotel {
+  id?: string;
+  slug: string;
+  name: string;
+  category: string;
+  stars: number;
+  area: string;
+  address: string;
+  lat: number;
+  lng: number;
+  published: boolean;
+  seoTitle: string;
+  metaDescription: string;
+  h1: string;
+  intro: string;
+  headlineOffer: string;
+  guestDiscount: number;
+  discountCode: string;
+  pickupNotes: string;
+  responseTime: string;
+  body: string;
+  nearbyAttractions: HotelAttraction[];
+  whyRentFromUs: string[];
+  faqs: { question: string; answer: string }[];
+  outreachStatus: "not_contacted" | "contacted" | "replied" | "linked" | "declined";
+  linkedUrl: string;
+  outreachNotes: string;
+  updatedAt?: any;
+  createdAt?: any;
+}
+
+export const OUTREACH_STATUSES = [
+  { value: "not_contacted", label: "Not Contacted" },
+  { value: "contacted", label: "Contacted" },
+  { value: "replied", label: "Replied" },
+  { value: "linked", label: "Linked" },
+  { value: "declined", label: "Declined" },
+];
