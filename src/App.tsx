@@ -14,6 +14,8 @@ const VehicleGuideList = lazy(() => import('./pages/vehicle-guides/VehicleGuideL
 const VehicleGuideEditor = lazy(() => import('./pages/vehicle-guides/VehicleGuideEditor'));
 const FaqList = lazy(() => import('./pages/faqs/FaqList'));
 const FaqEditor = lazy(() => import('./pages/faqs/FaqEditor'));
+const HotelList = lazy(() => import("./pages/hotels/HotelList"));
+const HotelEditor = lazy(() => import("./pages/hotels/HotelEditor"));
 const Media = lazy(() => import('./pages/Media'));
 const Deploys = lazy(() => import('./pages/Deploys'));
 const Logs = lazy(() => import('./pages/Logs'));
@@ -73,6 +75,16 @@ export default function App() {
             } />
             <Route path="/faqs/:id" element={
               <Suspense fallback={<LoadingScreen />}><FaqEditor /></Suspense>
+            } />
+
+            <Route path="/hotels" element={
+              <Suspense fallback={<LoadingScreen />}><HotelList /></Suspense>
+            } />
+            <Route path="/hotels/new" element={
+              <Suspense fallback={<LoadingScreen />}><HotelEditor /></Suspense>
+            } />
+            <Route path="/hotels/:slug" element={
+              <Suspense fallback={<LoadingScreen />}><HotelEditor /></Suspense>
             } />
 
             <Route path="/media" element={
