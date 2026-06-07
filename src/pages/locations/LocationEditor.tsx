@@ -13,6 +13,7 @@ import { RichTextEditor } from '@/components/editor/RichTextEditor';
 import { LanguageSwitcher, LANGUAGES } from '@/components/editor/LanguageSwitcher';
 import { Location, Translation, WebsiteCar } from '@/types';
 import { cn } from '@/lib/utils';
+import { triggerMarketingDeploy } from '@/lib/triggerDeploy';
 
 export default function LocationEditor() {
   const { slug } = useParams();
@@ -84,6 +85,7 @@ export default function LocationEditor() {
       await setDoc(doc(db, 'locations', slug!), data);
       
       if (status === 'published') {
+        await triggerMarketingDeploy();
         toast.success('Published! Deploy triggered.');
       } else {
         toast.success('Save successful');
