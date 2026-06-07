@@ -19,6 +19,7 @@ import { VehicleGuide, WebsiteCar, Translation } from '@/types';
 
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { triggerMarketingDeploy } from '@/lib/triggerDeploy';
 
 const FEATURES = [
   'Bluetooth', 'USB', 'Reverse Camera', 'Apple CarPlay', 'Android Auto',
@@ -172,6 +173,7 @@ export default function VehicleGuideEditor() {
       await setDoc(doc(db, 'vehicle_guides', formData.slug!), data);
 
       if (status === 'published') {
+        await triggerMarketingDeploy();
         toast.success('Guide published and deploy triggered');
       } else {
         toast.success('Guide saved as draft');
