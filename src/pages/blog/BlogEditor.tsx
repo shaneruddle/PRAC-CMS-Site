@@ -16,6 +16,7 @@ import { RichTextEditor } from '@/components/editor/RichTextEditor';
 import { LanguageSwitcher, LANGUAGES } from '@/components/editor/LanguageSwitcher';
 import { BlogPost, Translation } from '@/types';
 import { cn } from '@/lib/utils';
+import { triggerMarketingDeploy } from '@/lib/triggerDeploy';
 
 export default function BlogEditor() {
   const { slug: existingSlug } = useParams();
@@ -118,14 +119,7 @@ export default function BlogEditor() {
             await setDoc(doc(db, 'blog_posts', docId), data);
       
       if (status === 'published') {
-        // Trigger deploy
-        await setDoc(doc(collection(db, 'deploy_triggers')), {
-          triggeredAt: serverTimestamp(),
-          triggeredBy: auth.currentUser?.email,
-          status: 'queued',
-          changedCollection: 'blog_posts',
-          changedDocId: formData.slug
-        });
+        await triggerMarketingDeploy();
         toast.success('Published! Deploy triggered.');
       } else {
         toast.success('Draft saved');
