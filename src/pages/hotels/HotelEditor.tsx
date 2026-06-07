@@ -14,6 +14,7 @@ import { Save, ArrowLeft, Loader2, Plus, Trash2, ChevronDown, ChevronUp } from "
 import { RichTextEditor } from "@/components/editor/RichTextEditor";
 import { Hotel, OUTREACH_STATUSES } from "@/types";
 import { cn } from "@/lib/utils";
+import { triggerMarketingDeploy } from "@/lib/triggerDeploy";
 
 const CATEGORIES = ["hotel", "resort", "boutique", "serviced_apartment", "guesthouse", "villa"];
 
@@ -158,7 +159,8 @@ export default function HotelEditor() {
         createdAt: isNew ? serverTimestamp() : formData.createdAt,
       };
       await setDoc(doc(db, "hotels", formData.slug!), data);
-      toast.success(formData.published ? "Hotel saved — live on next deploy" : "Hotel saved (not published)");
+      if (formData.published) await triggerMarketingDeploy();
+      toast.success(formData.published ? "Hotel published — deploy triggered" : "Hotel saved (not published)");
       if (isNew) navigate(`/hotels/${formData.slug}`);
     } catch (error) {
       console.error(error);
