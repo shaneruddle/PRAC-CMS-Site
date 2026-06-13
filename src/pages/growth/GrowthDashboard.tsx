@@ -8,6 +8,8 @@ import {
   getDoc,
   doc,
   setDoc,
+  updateDoc,
+  addDoc,
   onSnapshot,
   serverTimestamp,
   where,
@@ -28,6 +30,8 @@ import {
   ThumbsDown,
   Loader2,
   XCircle,
+  Copy,
+  ClipboardCheck,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -53,9 +57,10 @@ interface AgentTask {
   id: string;
   weekId: string;
   actionIndex: number;
-  status: 'queued' | 'executing' | 'done' | 'failed' | 'ignored';
+  status: 'queued' | 'executing' | 'done' | 'failed' | 'ignored' | 'cowork_ready';
   result?: string;
   error?: string;
+  coworkPrompt?: string;
   approvedAt?: { toDate: () => Date };
   executedAt?: { toDate: () => Date };
 }
@@ -85,14 +90,15 @@ const CHANNEL_CLASS: Record<string, string> = {
 };
 
 const STATUS_CONFIG = {
-  queued:    { label: 'Queued',    icon: Clock,        className: 'text-amber-600 bg-amber-50' },
-  executing: { label: 'Executing', icon: Loader2,      className: 'text-blue-600 bg-blue-50', spin: true },
-  done:      { label: 'Done',      icon: CheckCircle2, className: 'text-emerald-600 bg-emerald-50' },
-  failed:    { label: 'Failed',    icon: XCircle,      className: 'text-red-600 bg-red-50' },
-  ignored:   { label: 'Ignored',   icon: XCircle,      className: 'text-slate-400 bg-slate-50' },
+  queued:       { label: 'Queued',       icon: Clock,           className: 'text-amber-600 bg-amber-50' },
+  executing:    { label: 'Executing',    icon: Loader2,         className: 'text-blue-600 bg-blue-50', spin: true },
+  done:         { label: 'Done',         icon: CheckCircle2,    className: 'text-emerald-600 bg-emerald-50' },
+  failed:       { label: 'Failed',       icon: XCircle,         className: 'text-red-600 bg-red-50' },
+  ignored:      { label: 'Ignored',      icon: XCircle,         className: 'text-slate-400 bg-slate-50' },
+  cowork_ready: { label: 'Needs Cowork', icon: ClipboardCheck,  className: 'text-orange-600 bg-orange-50' },
 };
 
-const EXECUTOR_URL = 'https://pattayarentacar.com/api/growth/execute';
+const EXECUTOR_URL = 'https://pattaya-rent-a-car-rebuild-700448424476.us-west1.run.app/api/growth/execute';
 
 export default function GrowthDashboard() {
   const [weeks, setWeeks] = useState<AgentWeek[]>([]);
@@ -101,6 +107,9 @@ export default function GrowthDashboard() {
   const [knowledge, setKnowledge] = useState<AgentKnowledge[]>([]);
   const [loading, setLoading] = useState(true);
   const [approvingIndex, setApprovingIndex] = useState<number | null>(null);
+  const [pasteResults, setPasteResults] = useState<Record<number, string>>({});
+  const [submittingResult, setSubmittingResult] = useState<number | null>(null);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [expandedKnowledge, setExpandedKnowledge] = useState(false);
   const [latestWeekId, setLatestWeekId] = useState<string | null>(null);
 
@@ -171,11 +180,16 @@ export default function GrowthDashboard() {
         status: 'queued',
         approvedAt: serverTimestamp(),
       });
+
       const idToken = await auth.currentUser?.getIdToken();
       if (!idToken) throw new Error('Not authenticated');
+
       fetch(EXECUTOR_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        },
         body: JSON.stringify({ taskId }),
       }).catch(err => console.error('Executor call failed:', err));
     } catch (err: any) {
@@ -201,6 +215,43 @@ export default function GrowthDashboard() {
       console.error('Ignore failed:', err);
     }
   }, [latestWeekId]);
+
+  const handleCopyPrompt = useCallback((action: AgentAction, prompt: string) => {
+    navigator.clipboard.writeText(prompt).then(() => {
+      setCopiedIndex(action.index);
+      setTimeout(() => setCopiedIndex(null), 2000);
+    });
+  }, []);
+
+  const handleSubmitResult = useCallback(async (action: AgentAction) => {
+    if (!latestWeekId) return;
+    const result = pasteResults[action.index]?.trim();
+    if (!result) return;
+    setSubmittingResult(action.index);
+    try {
+      const taskId = `${latestWeekId}-${action.index}`;
+      await updateDoc(doc(db, 'agent_tasks', taskId), {
+        status: 'done',
+        result,
+        executedAt: serverTimestamp(),
+      });
+      await addDoc(collection(db, 'agent_knowledge'), {
+        topic: action.action.slice(0, 80),
+        category: action.category,
+        content: result,
+        fact: result.slice(0, 300),
+        source: 'cowork-execution',
+        confidence: 'high',
+        weekId: latestWeekId,
+        createdAt: serverTimestamp(),
+      });
+      setPasteResults(prev => { const n = { ...prev }; delete n[action.index]; return n; });
+    } catch (err) {
+      console.error('Submit result failed:', err);
+    } finally {
+      setSubmittingResult(null);
+    }
+  }, [latestWeekId, pasteResults]);
 
   const latestAnalysed = weeks.find(w => w.status === 'analysed');
 
@@ -279,6 +330,7 @@ export default function GrowthDashboard() {
               const statusCfg = task ? STATUS_CONFIG[task.status] : null;
               const StatusIcon = statusCfg?.icon;
               const isApproving = approvingIndex === action.index;
+
               return (
                 <div key={action.index} className={cn('px-6 py-5 transition-colors', task && task.status !== 'ignored' ? 'bg-slate-50/60' : 'hover:bg-slate-50/50')}>
                   <div className="flex items-start gap-4">
@@ -286,8 +338,11 @@ export default function GrowthDashboard() {
                       P{action.priority} {PRIORITY_LABEL[action.priority] ?? ''}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className={cn('text-sm font-semibold mb-1', task?.status === 'ignored' ? 'text-slate-400 line-through' : 'text-slate-900')}>{action.action}</p>
+                      <p className={cn('text-sm font-semibold mb-1', task?.status === 'ignored' ? 'text-slate-400 line-through' : 'text-slate-900')}>
+                        {action.action}
+                      </p>
                       <p className="text-xs text-slate-500 leading-relaxed">{action.rationale}</p>
+
                       {task?.result && (
                         <div className="mt-3 p-3 bg-emerald-50 border border-emerald-100 rounded-lg">
                           <p className="text-xs text-emerald-800 leading-relaxed">{task.result}</p>
@@ -298,23 +353,84 @@ export default function GrowthDashboard() {
                           <p className="text-xs text-red-700 leading-relaxed">{task.error}</p>
                         </div>
                       )}
+
+                      {task?.status === 'cowork_ready' && task.coworkPrompt && (
+                        <div className="mt-3 space-y-2">
+                          <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-[10px] font-bold text-orange-700 uppercase tracking-widest">Cowork Prompt</span>
+                              <button
+                                onClick={() => handleCopyPrompt(action, task.coworkPrompt!)}
+                                className="flex items-center gap-1 text-[10px] font-bold text-orange-700 hover:text-orange-900 transition-colors"
+                              >
+                                {copiedIndex === action.index ? <CheckCircle2 size={11} /> : <Copy size={11} />}
+                                {copiedIndex === action.index ? 'Copied!' : 'Copy prompt'}
+                              </button>
+                            </div>
+                            <pre className="text-xs text-orange-900 whitespace-pre-wrap font-mono leading-relaxed max-h-48 overflow-y-auto">{task.coworkPrompt}</pre>
+                          </div>
+                          <div className="space-y-1.5">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Paste Cowork result here</p>
+                            <textarea
+                              className="w-full h-24 text-xs p-2.5 border border-slate-200 rounded-lg resize-none focus:outline-none focus:ring-1 focus:ring-slate-300 text-slate-700 placeholder:text-slate-300 bg-white"
+                              placeholder="Paste the result from your Cowork session..."
+                              value={pasteResults[action.index] ?? ''}
+                              onChange={e => setPasteResults(prev => ({ ...prev, [action.index]: e.target.value }))}
+                            />
+                            <Button
+                              size="sm"
+                              className="h-7 px-3 text-[10px] font-bold uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 text-white"
+                              onClick={() => handleSubmitResult(action)}
+                              disabled={!pasteResults[action.index]?.trim() || submittingResult === action.index}
+                            >
+                              {submittingResult === action.index
+                                ? <Loader2 size={11} className="animate-spin mr-1" />
+                                : <CheckCircle2 size={11} className="mr-1" />
+                              }
+                              Save Result to Memory
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
+
                     <div className="flex items-center gap-2 shrink-0">
                       <span className={cn('text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full', CHANNEL_CLASS[action.category] ?? 'bg-slate-100 text-slate-600')}>
                         {action.category}
                       </span>
+
                       {task ? (
                         <div className={cn('flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold', statusCfg?.className)}>
-                          {StatusIcon && <StatusIcon size={11} className={(statusCfg as any)?.spin ? 'animate-spin' : ''} />}
+                          {StatusIcon && (
+                            <StatusIcon
+                              size={11}
+                              className={(statusCfg as any)?.spin ? 'animate-spin' : ''}
+                            />
+                          )}
                           {statusCfg?.label}
                         </div>
                       ) : (
                         <div className="flex items-center gap-1">
-                          <Button size="sm" variant="outline" className="h-7 px-3 text-[10px] font-bold uppercase tracking-widest border-emerald-200 text-emerald-700 hover:bg-emerald-50" onClick={() => handleApprove(action)} disabled={isApproving}>
-                            {isApproving ? <Loader2 size={11} className="animate-spin mr-1" /> : <ThumbsUp size={11} className="mr-1" />}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-3 text-[10px] font-bold uppercase tracking-widest border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                            onClick={() => handleApprove(action)}
+                            disabled={isApproving}
+                          >
+                            {isApproving
+                              ? <Loader2 size={11} className="animate-spin mr-1" />
+                              : <ThumbsUp size={11} className="mr-1" />
+                            }
                             Approve
                           </Button>
-                          <Button size="sm" variant="ghost" className="h-7 px-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-100" onClick={() => handleIgnore(action)} disabled={isApproving}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                            onClick={() => handleIgnore(action)}
+                            disabled={isApproving}
+                          >
                             <ThumbsDown size={11} className="mr-1" />
                             Ignore
                           </Button>
