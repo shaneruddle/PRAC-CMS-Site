@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   collection,
   query,
@@ -7,10 +7,14 @@ import {
   getDocs,
   getDoc,
   doc,
+  setDoc,
+  onSnapshot,
+  serverTimestamp,
   where,
 } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   TrendingUp,
   Zap,
@@ -20,6 +24,10 @@ import {
   Clock,
   ChevronDown,
   ChevronUp,
+  ThumbsUp,
+  ThumbsDown,
+  Loader2,
+  XCircle,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -34,14 +42,22 @@ interface AgentWeek {
 }
 
 interface AgentAction {
-  id: string;
-  weekId: string;
+  index: number;
   priority: number;
+  category: string;
   action: string;
   rationale: string;
-  channel: string;
-  outcome?: string;
-  createdAt?: { toDate: () => Date };
+}
+
+interface AgentTask {
+  id: string;
+  weekId: string;
+  actionIndex: number;
+  status: 'queued' | 'executing' | 'done' | 'failed' | 'ignored';
+  result?: string;
+  error?: string;
+  approvedAt?: { toDate: () => Date };
+  executedAt?: { toDate: () => Date };
 }
 
 interface AgentKnowledge {
@@ -61,18 +77,32 @@ const PRIORITY_CLASS: Record<number, string> = {
 };
 const CHANNEL_CLASS: Record<string, string> = {
   seo: 'bg-purple-50 text-purple-700',
-  google_ads: 'bg-yellow-50 text-yellow-800',
-  social: 'bg-pink-50 text-pink-700',
+  ads: 'bg-yellow-50 text-yellow-800',
   content: 'bg-teal-50 text-teal-700',
-  ux: 'bg-indigo-50 text-indigo-700',
+  conversion: 'bg-indigo-50 text-indigo-700',
+  technical: 'bg-gray-100 text-gray-700',
+  other: 'bg-slate-100 text-slate-600',
 };
+
+const STATUS_CONFIG = {
+  queued:    { label: 'Queued',    icon: Clock,        className: 'text-amber-600 bg-amber-50' },
+  executing: { label: 'Executing', icon: Loader2,      className: 'text-blue-600 bg-blue-50', spin: true },
+  done:      { label: 'Done',      icon: CheckCircle2, className: 'text-emerald-600 bg-emerald-50' },
+  failed:    { label: 'Failed',    icon: XCircle,      className: 'text-red-600 bg-red-50' },
+  ignored:   { label: 'Ignored',   icon: XCircle,      className: 'text-slate-400 bg-slate-50' },
+};
+
+const EXECUTOR_URL = 'https://pattayarentacar.com/api/growth/execute';
 
 export default function GrowthDashboard() {
   const [weeks, setWeeks] = useState<AgentWeek[]>([]);
   const [actions, setActions] = useState<AgentAction[]>([]);
+  const [tasks, setTasks] = useState<Record<number, AgentTask>>({});
   const [knowledge, setKnowledge] = useState<AgentKnowledge[]>([]);
   const [loading, setLoading] = useState(true);
+  const [approvingIndex, setApprovingIndex] = useState<number | null>(null);
   const [expandedKnowledge, setExpandedKnowledge] = useState(false);
+  const [latestWeekId, setLatestWeekId] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -85,20 +115,18 @@ export default function GrowthDashboard() {
 
         const latestAnalysed = weekDocs.find(w => w.status === 'analysed');
         if (latestAnalysed) {
-          const PRIORITY_MAP: Record<string, number> = { high: 1, medium: 2, low: 3 };
-          const actionDoc = await getDoc(doc(db, 'agent_actions', latestAnalysed.id));
-          if (actionDoc.exists()) {
-            const data = actionDoc.data();
-            const rawActions = (data.actions || []).map((a: any, i: number) => ({
-              id: `${latestAnalysed.id}-${i}`,
-              weekId: latestAnalysed.id,
-              priority: PRIORITY_MAP[a.priority] ?? 3,
+          setLatestWeekId(latestAnalysed.weekId);
+          const actionsDoc = await getDoc(doc(db, 'agent_actions', latestAnalysed.id));
+          if (actionsDoc.exists()) {
+            const data = actionsDoc.data();
+            const rawActions = (data.actions || []) as any[];
+            setActions(rawActions.map((a, i) => ({
+              index: i,
+              priority: a.priority === 'high' ? 1 : a.priority === 'medium' ? 2 : 3,
+              category: a.category,
               action: a.action,
               rationale: a.reasoning,
-              channel: a.category,
-              outcome: a.outcome,
-            }));
-            setActions(rawActions.sort((a: any, b: any) => a.priority - b.priority));
+            })));
           }
         }
 
@@ -114,6 +142,65 @@ export default function GrowthDashboard() {
     }
     load();
   }, []);
+
+  useEffect(() => {
+    if (!latestWeekId) return;
+    const q = query(collection(db, 'agent_tasks'), where('weekId', '==', latestWeekId));
+    const unsub = onSnapshot(q, snap => {
+      const taskMap: Record<number, AgentTask> = {};
+      snap.docs.forEach(d => {
+        const t = { id: d.id, ...d.data() } as AgentTask;
+        taskMap[t.actionIndex] = t;
+      });
+      setTasks(taskMap);
+    });
+    return unsub;
+  }, [latestWeekId]);
+
+  const handleApprove = useCallback(async (action: AgentAction) => {
+    if (!latestWeekId) return;
+    setApprovingIndex(action.index);
+    try {
+      const taskId = `${latestWeekId}-${action.index}`;
+      await setDoc(doc(db, 'agent_tasks', taskId), {
+        weekId: latestWeekId,
+        actionIndex: action.index,
+        action: action.action,
+        channel: action.category,
+        priority: action.priority,
+        status: 'queued',
+        approvedAt: serverTimestamp(),
+      });
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) throw new Error('Not authenticated');
+      fetch(EXECUTOR_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+        body: JSON.stringify({ taskId }),
+      }).catch(err => console.error('Executor call failed:', err));
+    } catch (err: any) {
+      console.error('Approve failed:', err);
+    } finally {
+      setApprovingIndex(null);
+    }
+  }, [latestWeekId]);
+
+  const handleIgnore = useCallback(async (action: AgentAction) => {
+    if (!latestWeekId) return;
+    try {
+      await setDoc(doc(db, 'agent_tasks', `${latestWeekId}-${action.index}`), {
+        weekId: latestWeekId,
+        actionIndex: action.index,
+        action: action.action,
+        channel: action.category,
+        priority: action.priority,
+        status: 'ignored',
+        approvedAt: serverTimestamp(),
+      });
+    } catch (err) {
+      console.error('Ignore failed:', err);
+    }
+  }, [latestWeekId]);
 
   const latestAnalysed = weeks.find(w => w.status === 'analysed');
 
@@ -187,28 +274,57 @@ export default function GrowthDashboard() {
           </div>
         ) : (
           <div className="divide-y divide-slate-50">
-            {actions.map(action => (
-              <div key={action.id} className="px-6 py-5 hover:bg-slate-50/50 transition-colors">
-                <div className="flex items-start gap-4">
-                  <span className={cn('shrink-0 mt-0.5 text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border', PRIORITY_CLASS[action.priority] ?? 'bg-slate-50 text-slate-600 border-slate-200')}>
-                    P{action.priority} {PRIORITY_LABEL[action.priority] ?? ''}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-900 mb-1">{action.action}</p>
-                    <p className="text-xs text-slate-500 leading-relaxed">{action.rationale}</p>
+            {actions.map(action => {
+              const task = tasks[action.index];
+              const statusCfg = task ? STATUS_CONFIG[task.status] : null;
+              const StatusIcon = statusCfg?.icon;
+              const isApproving = approvingIndex === action.index;
+              return (
+                <div key={action.index} className={cn('px-6 py-5 transition-colors', task && task.status !== 'ignored' ? 'bg-slate-50/60' : 'hover:bg-slate-50/50')}>
+                  <div className="flex items-start gap-4">
+                    <span className={cn('shrink-0 mt-0.5 text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border', PRIORITY_CLASS[action.priority] ?? 'bg-slate-50 text-slate-600 border-slate-200')}>
+                      P{action.priority} {PRIORITY_LABEL[action.priority] ?? ''}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className={cn('text-sm font-semibold mb-1', task?.status === 'ignored' ? 'text-slate-400 line-through' : 'text-slate-900')}>{action.action}</p>
+                      <p className="text-xs text-slate-500 leading-relaxed">{action.rationale}</p>
+                      {task?.result && (
+                        <div className="mt-3 p-3 bg-emerald-50 border border-emerald-100 rounded-lg">
+                          <p className="text-xs text-emerald-800 leading-relaxed">{task.result}</p>
+                        </div>
+                      )}
+                      {task?.error && (
+                        <div className="mt-3 p-3 bg-red-50 border border-red-100 rounded-lg">
+                          <p className="text-xs text-red-700 leading-relaxed">{task.error}</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={cn('text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full', CHANNEL_CLASS[action.category] ?? 'bg-slate-100 text-slate-600')}>
+                        {action.category}
+                      </span>
+                      {task ? (
+                        <div className={cn('flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold', statusCfg?.className)}>
+                          {StatusIcon && <StatusIcon size={11} className={(statusCfg as any)?.spin ? 'animate-spin' : ''} />}
+                          {statusCfg?.label}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <Button size="sm" variant="outline" className="h-7 px-3 text-[10px] font-bold uppercase tracking-widest border-emerald-200 text-emerald-700 hover:bg-emerald-50" onClick={() => handleApprove(action)} disabled={isApproving}>
+                            {isApproving ? <Loader2 size={11} className="animate-spin mr-1" /> : <ThumbsUp size={11} className="mr-1" />}
+                            Approve
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 px-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-100" onClick={() => handleIgnore(action)} disabled={isApproving}>
+                            <ThumbsDown size={11} className="mr-1" />
+                            Ignore
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <span className={cn('shrink-0 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full', CHANNEL_CLASS[action.channel] ?? 'bg-slate-100 text-slate-600')}>
-                    {action.channel.replace('_', ' ')}
-                  </span>
                 </div>
-                {action.outcome && (
-                  <div className="mt-3 ml-[72px] flex items-center gap-1.5">
-                    <CheckCircle2 size={12} className="text-emerald-500" />
-                    <span className="text-[11px] text-slate-500 font-medium">{action.outcome}</span>
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
