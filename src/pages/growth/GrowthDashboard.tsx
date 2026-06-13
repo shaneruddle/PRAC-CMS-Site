@@ -5,6 +5,8 @@ import {
   orderBy,
   limit,
   getDocs,
+  getDoc,
+  doc,
   where,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -83,14 +85,21 @@ export default function GrowthDashboard() {
 
         const latestAnalysed = weekDocs.find(w => w.status === 'analysed');
         if (latestAnalysed) {
-          const actionsSnap = await getDocs(
-            query(
-              collection(db, 'agent_actions'),
-              where('weekId', '==', latestAnalysed.weekId),
-              orderBy('priority', 'asc')
-            )
-          );
-          setActions(actionsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as AgentAction[]);
+          const PRIORITY_MAP: Record<string, number> = { high: 1, medium: 2, low: 3 };
+          const actionDoc = await getDoc(doc(db, 'agent_actions', latestAnalysed.id));
+          if (actionDoc.exists()) {
+            const data = actionDoc.data();
+            const rawActions = (data.actions || []).map((a: any, i: number) => ({
+              id: `${latestAnalysed.id}-${i}`,
+              weekId: latestAnalysed.id,
+              priority: PRIORITY_MAP[a.priority] ?? 3,
+              action: a.action,
+              rationale: a.reasoning,
+              channel: a.category,
+              outcome: a.outcome,
+            }));
+            setActions(rawActions.sort((a: any, b: any) => a.priority - b.priority));
+          }
         }
 
         const knowledgeSnap = await getDocs(
