@@ -18,6 +18,7 @@ const Media = lazy(() => import('./pages/Media'));
 const Deploys = lazy(() => import('./pages/Deploys'));
 const Logs = lazy(() => import('./pages/Logs'));
 const GrowthDashboard = lazy(() => import('./pages/growth/GrowthDashboard'));
+const SEOKnowledge = lazy(() => import('./pages/growth/SEOKnowledge'));
 
 function LoadingScreen() {
   return (
@@ -87,6 +88,9 @@ export default function App() {
             } />
             <Route path="/growth" element={
               <Suspense fallback={<LoadingScreen />}><GrowthDashboard /></Suspense>
+            } />
+            <Route path="/growth/knowledge" element={
+              <Suspense fallback={<LoadingScreen />}><SEOKnowledge /></Suspense>
             } />
           </Route>
 
