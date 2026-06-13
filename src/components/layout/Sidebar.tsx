@@ -13,6 +13,7 @@ LogOut,
 ChevronLeft,
 ChevronRight,
 TrendingUp,
+  Brain,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -29,6 +30,7 @@ const navItems = [
 { icon: ImageIcon, label: 'Media Library', path: '/media' },
 { icon: CloudUpload, label: 'Deploys', path: '/deploys' },
 { icon: TrendingUp, label: 'Growth', path: '/growth' },
+  { icon: Brain, label: 'SEO Knowledge', path: '/growth/knowledge' },
 ];
 
 export function Sidebar({ collapsed, setCollapsed }: { collapsed: boolean, setCollapsed: (val: boolean) => void }) {
