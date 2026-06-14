@@ -32,9 +32,37 @@ import {
   XCircle,
   Copy,
   ClipboardCheck,
+  Search,
+  MousePointerClick,
+  Eye,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+
+interface GscQuery {
+  query: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
+interface GscPage {
+  page: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
+interface SearchConsoleData {
+  topQueries: GscQuery[];
+  topPages: GscPage[];
+  totalClicks: number;
+  totalImpressions: number;
+  avgPosition: number;
+  error?: string;
+}
 
 interface AgentWeek {
   id: string;
@@ -43,6 +71,7 @@ interface AgentWeek {
   createdAt?: { toDate: () => Date };
   analysedAt?: { toDate: () => Date };
   summary?: string;
+  searchConsole?: SearchConsoleData;
 }
 
 interface AgentAction {
@@ -98,7 +127,11 @@ const STATUS_CONFIG = {
   cowork_ready: { label: 'Needs Cowork', icon: ClipboardCheck,  className: 'text-orange-600 bg-orange-50' },
 };
 
-const EXECUTOR_URL = 'https://pattaya-rent-a-car-rebuild-700448424476.us-west1.run.app/api/growth/execute';
+// Autonomous execution — kept for future re-enablement
+// const EXECUTOR_URL = 'https://pattaya-rent-a-car-rebuild-700448424476.us-west1.run.app/api/growth/execute';
+
+// Cowork-prompt path — all approvals generate a prompt for Shane to run in a Cowork session
+const EXECUTOR_URL = 'https://pattaya-rent-a-car-rebuild-700448424476.us-west1.run.app/api/growth/generate-prompt';
 
 export default function GrowthDashboard() {
   const [weeks, setWeeks] = useState<AgentWeek[]>([]);
@@ -152,6 +185,7 @@ export default function GrowthDashboard() {
     load();
   }, []);
 
+  // Live subscription to agent_tasks for latest week
   useEffect(() => {
     if (!latestWeekId) return;
     const q = query(collection(db, 'agent_tasks'), where('weekId', '==', latestWeekId));
@@ -265,6 +299,7 @@ export default function GrowthDashboard() {
         <p className="text-sm text-slate-500">AI-generated actions from weekly marketing data analysis. Runs every Monday 07:30 BKK.</p>
       </div>
 
+      {/* Week badges */}
       <div className="flex gap-2 flex-wrap">
         {loading
           ? Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-8 w-24 bg-slate-100 animate-pulse rounded-full" />)
@@ -277,6 +312,7 @@ export default function GrowthDashboard() {
         }
       </div>
 
+      {/* Latest analysis summary */}
       {latestAnalysed && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
           <div className="flex items-start justify-between gap-4">
@@ -299,6 +335,94 @@ export default function GrowthDashboard() {
         </div>
       )}
 
+      {/* Search Console panel */}
+      {(() => {
+        const gsc = latestAnalysed?.searchConsole;
+        if (!gsc && !loading) return null;
+        return (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Search size={14} className="text-slate-500" />
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">
+                  Google Search Console{latestAnalysed ? ` — ${latestAnalysed.weekId}` : ''}
+                </span>
+              </div>
+            </div>
+            {loading ? (
+              <div className="p-6 space-y-3">
+                {[1,2,3].map(i => <div key={i} className="h-3 bg-slate-50 animate-pulse rounded" />)}
+              </div>
+            ) : gsc?.error ? (
+              <div className="px-6 py-5 flex items-center gap-2 text-red-600">
+                <AlertCircle size={14} />
+                <p className="text-xs">GSC error: {gsc.error}</p>
+              </div>
+            ) : gsc ? (
+              <div className="p-6 space-y-5">
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-slate-50 rounded-lg p-3 text-center">
+                    <div className="flex items-center justify-center gap-1.5 mb-1">
+                      <MousePointerClick size={12} className="text-emerald-600" />
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Clicks</p>
+                    </div>
+                    <p className="text-xl font-bold text-slate-800">{gsc.totalClicks.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg p-3 text-center">
+                    <div className="flex items-center justify-center gap-1.5 mb-1">
+                      <Eye size={12} className="text-blue-500" />
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Impressions</p>
+                    </div>
+                    <p className="text-xl font-bold text-slate-800">{gsc.totalImpressions.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg p-3 text-center">
+                    <div className="flex items-center justify-center gap-1.5 mb-1">
+                      <TrendingUp size={12} className="text-purple-500" />
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Avg Position</p>
+                    </div>
+                    <p className="text-xl font-bold text-slate-800">{gsc.avgPosition}</p>
+                  </div>
+                </div>
+                {gsc.topQueries.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Top Queries</p>
+                    <div className="rounded-lg border border-slate-100 overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-100">
+                            <th className="text-left px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Query</th>
+                            <th className="text-right px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Clicks</th>
+                            <th className="text-right px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Impr</th>
+                            <th className="text-right px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">CTR</th>
+                            <th className="text-right px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pos</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                          {gsc.topQueries.slice(0, 10).map((q, i) => (
+                            <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="px-4 py-2 text-slate-700 font-medium max-w-[240px] truncate">{q.query}</td>
+                              <td className="px-3 py-2 text-right text-slate-600 font-mono">{q.clicks}</td>
+                              <td className="px-3 py-2 text-right text-slate-400 font-mono">{q.impressions.toLocaleString()}</td>
+                              <td className="px-3 py-2 text-right text-slate-400 font-mono">{(q.ctr * 100).toFixed(1)}%</td>
+                              <td className="px-4 py-2 text-right font-mono">
+                                <span className={cn('px-1.5 py-0.5 rounded text-[10px] font-bold', q.position <= 3 ? 'bg-emerald-50 text-emerald-700' : q.position <= 10 ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-500')}>
+                                  {q.position}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
+        );
+      })()}
+
+      {/* Actions */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -445,6 +569,7 @@ export default function GrowthDashboard() {
         )}
       </div>
 
+      {/* Knowledge base */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
