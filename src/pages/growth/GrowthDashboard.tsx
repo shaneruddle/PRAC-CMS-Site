@@ -132,6 +132,7 @@ const STATUS_CONFIG = {
 
 // Cowork-prompt path — all approvals generate a prompt for Shane to run in a Cowork session
 const EXECUTOR_URL = 'https://pattaya-rent-a-car-rebuild-700448424476.us-west1.run.app/api/growth/generate-prompt';
+const BACKEND_URL = 'https://pattaya-rent-a-car-rebuild-700448424476.us-west1.run.app';
 
 export default function GrowthDashboard() {
   const [weeks, setWeeks] = useState<AgentWeek[]>([]);
@@ -144,6 +145,8 @@ export default function GrowthDashboard() {
   const [submittingResult, setSubmittingResult] = useState<number | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [expandedKnowledge, setExpandedKnowledge] = useState(false);
+  const [runningAnalysis, setRunningAnalysis] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [latestWeekId, setLatestWeekId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -289,6 +292,28 @@ export default function GrowthDashboard() {
 
   const latestAnalysed = weeks.find(w => w.status === 'analysed');
 
+  const handleRunNow = useCallback(async () => {
+    setRunningAnalysis(true);
+    setAnalysisError(null);
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error('Not signed in');
+      const token = await user.getIdToken();
+      const res = await fetch(`${BACKEND_URL}/api/growth/run-now`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || 'Analysis failed');
+      // Reload the page data after a short delay for Firestore to settle
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (err: any) {
+      setAnalysisError(err.message || 'Unknown error');
+    } finally {
+      setRunningAnalysis(false);
+    }
+  }, []);
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div>
@@ -296,7 +321,20 @@ export default function GrowthDashboard() {
           <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest bg-emerald-50 px-2 py-0.5 rounded">Growth Agent</span>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Growth Dashboard</h1>
         </div>
-        <p className="text-sm text-slate-500">AI-generated actions from weekly marketing data analysis. Runs every Monday 07:30 BKK.</p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <p className="text-sm text-slate-500">AI-generated actions from weekly marketing data analysis. Runs every Monday 07:30 BKK.</p>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleRunNow}
+            disabled={runningAnalysis}
+            className="h-7 text-xs gap-1.5 border-violet-200 text-violet-700 hover:bg-violet-50"
+          >
+            {runningAnalysis ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
+            {runningAnalysis ? 'Analysing…' : 'Run Analysis Now'}
+          </Button>
+          {analysisError && <span className="text-xs text-red-600">{analysisError}</span>}
+        </div>
       </div>
 
       {/* Week badges */}
