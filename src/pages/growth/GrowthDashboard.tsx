@@ -372,10 +372,7 @@ export default function GrowthDashboard() {
         setRuns(runDocs);
         if (runDocs.length > 0) setActiveRunId(runDocs[0].id);
 
-        const knowledgeSnap = await getDocs(
-          query(collection(db, 'agent_knowledge'), orderBy('createdAt', 'desc'), limit(20))
-        );
-        setKnowledge(knowledgeSnap.docs.map(d => ({ id: d.id, ...d.data() })) as AgentKnowledge[]);
+        // knowledge loaded via live subscription below
       } catch (err) {
         console.error('GrowthDashboard load error:', err);
       } finally {
@@ -399,6 +396,15 @@ export default function GrowthDashboard() {
     });
     return unsub;
   }, [activeRunId]);
+
+  // Live subscription to agent_knowledge
+  useEffect(() => {
+    const q = query(collection(db, 'agent_knowledge'), orderBy('createdAt', 'desc'), limit(20));
+    const unsub = onSnapshot(q, snap => {
+      setKnowledge(snap.docs.map(d => ({ id: d.id, ...d.data() })) as AgentKnowledge[]);
+    });
+    return unsub;
+  }, []);
 
   // Reset task state when switching run tabs
   const handleSelectRun = useCallback((runId: string) => {
