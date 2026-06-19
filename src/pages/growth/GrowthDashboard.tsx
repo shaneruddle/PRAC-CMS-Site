@@ -153,7 +153,7 @@ export default function GrowthDashboard() {
     async function load() {
       try {
         const weeksSnap = await getDocs(
-          query(collection(db, 'agent_weeks'), orderBy('createdAt', 'desc'), limit(8))
+          query(collection(db, 'agent_weeks'), orderBy('weekStart', 'desc'), limit(8))
         );
         const weekDocs = weeksSnap.docs.map(d => ({ id: d.id, ...d.data() })) as AgentWeek[];
         setWeeks(weekDocs);
