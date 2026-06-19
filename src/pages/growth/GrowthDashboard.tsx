@@ -539,6 +539,7 @@ export default function GrowthDashboard() {
               { name: 'Google Search Console', url: 'https://cdn.simpleicons.org/googlesearchconsole' },
               { name: 'Bing Webmaster Tools',  url: 'https://cdn.simpleicons.org/microsoftbing' },
               { name: 'Firebase Enquiries',    url: 'https://cdn.simpleicons.org/firebase' },
+              { name: 'DataForSEO Rankings',    url: 'https://cdn.simpleicons.org/dataforseo' },
             ].map(p => (
               <div key={p.name} title={p.name} className="w-7 h-7 rounded-lg bg-white border border-slate-100 shadow-sm flex items-center justify-center overflow-hidden p-1">
                 <img src={p.url} alt={p.name} className="w-full h-full object-contain" />
