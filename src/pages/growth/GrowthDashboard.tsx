@@ -12,6 +12,7 @@ import {
   onSnapshot,
   serverTimestamp,
   where,
+  getDoc,
 } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
@@ -34,6 +35,10 @@ import {
   MousePointerClick,
   Eye,
   RotateCcw,
+  FileText,
+  X,
+  Pencil,
+  Save,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -131,6 +136,216 @@ const BACKEND_URL  = 'https://pattaya-rent-a-car-rebuild-700448424476.us-west1.r
 
 // ── Component ────────────────────────────────────────────────────────────────
 
+
+const DEFAULT_BRIEFING = `# PRAC Cowork Briefing
+
+**Purpose:** This document brings Claude up to speed on the Pattaya Rent a Car technical setup before a task is given. Read this file in full, confirm you understand it, then wait for the task prompt. Once done, reply with: **"Briefing read. Ready for task."** I will then follow up with the specific task prompt.
+
+---
+
+## Business
+Pattaya Rent a Car (pattayarentacar.com) — car rental in Pattaya, Thailand. Owner: Shane Ruddle. Timezone: GMT+7.
+
+---
+
+## Repos
+
+### PRAC-Marketing-Site
+- **Live site:** www.pattayarentacar.com
+- **GitHub:** github.com/shaneruddle/PRAC-Marketing-Site
+- **Stack:** React / TypeScript
+- **Important:** Most content lives in Firebase/Firestore — NOT in repo files. The repo is the frontend shell only.
+
+### Pattaya-Rent-a-Car-Rebuild-
+- **GitHub:** github.com/shaneruddle/Pattaya-Rent-a-Car-Rebuild-
+- **What:** Backend API / Cloud Run service. Growth agent, server routes. NOT the public site.
+- **Stack:** Node.js / TypeScript / Express
+- **Deploy:** Push to main → Cloud Build → Cloud Run (us-west1). Fully automatic.
+
+### PRAC-CMS-Site
+- **Live site:** admin-pattayarentacar.web.app
+- **GitHub:** github.com/shaneruddle/PRAC-CMS-Site
+- **What:** Internal admin dashboard. Only touch this for admin UI changes.
+- **Deploy:** Push to main → Firebase Hosting. Fully automatic.
+
+---
+
+## Firebase / Firestore
+
+**Project ID:** pattaya-rent-a-car-rebuild
+
+### Content collections (marketing site)
+- \`blog_posts\` — blog articles
+- \`faqs\` — FAQ entries
+- \`hotels\` — hotel listings
+- \`locations\` — location/area landing pages (Jomtien, Naklua, Pratumnak, etc.)
+- \`vehicle_guides\` — vehicle and fleet category guides
+
+### Growth agent collections
+- \`agent_runs\` — on-demand analysis runs
+- \`agent_tasks\` — approved tasks
+- \`agent_knowledge\` — task results / feedback stored after completion
+- \`agent_config\` — configuration (including this briefing)
+
+---
+
+## Task type → Where to work
+
+| Task | Where |
+|------|-------|
+| New location/area page | Write doc to \`locations\` in Firestore |
+| New vehicle guide | Write doc to \`vehicle_guides\` in Firestore |
+| New blog post | Write doc to \`blog_posts\` in Firestore |
+| On-page SEO (meta, schema, hreflang) | PRAC-Marketing-Site repo |
+| Conversion / booking flow / UX | PRAC-Marketing-Site repo |
+| Technical fixes (redirects, speed, crawl) | PRAC-Marketing-Site repo |
+| Google Ads | Google Ads UI via browser — no repo |
+| Backend / API / growth agent | Pattaya-Rent-a-Car-Rebuild- repo |
+| Admin dashboard UI | PRAC-CMS-Site repo (rare) |
+
+**Rule: content goes into Firestore first. Only touch a repo when a code or template change is also required.**
+
+---
+
+## Code conventions
+- Match the style of the existing file exactly — do not impose a new pattern
+- React functional components with hooks only — no class components
+- TypeScript throughout
+- Minimal diffs — change only what the task requires
+
+---
+
+## Deployment rules
+- Never cross-deploy CMS and marketing site
+- After any deploy, verify the change is live before reporting done
+- Cloud Run deploys take ~3 min; Firebase Hosting deploys take ~1 min
+
+---
+
+Once you have read and understood everything above, reply with: **"Briefing read. Ready for task."**
+`;
+
+function CoworkBriefingModal({ onClose }: { onClose: () => void }) {
+  const [content, setContent]     = useState<string>('');
+  const [editing, setEditing]     = useState(false);
+  const [editText, setEditText]   = useState('');
+  const [saving, setSaving]       = useState(false);
+  const [copied, setCopied]       = useState(false);
+  const [loading, setLoading]     = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const snap = await getDoc(doc(db, 'agent_config', 'cowork_briefing'));
+        const text = snap.exists() ? snap.data().content : DEFAULT_BRIEFING;
+        setContent(text);
+        setEditText(text);
+      } catch {
+        setContent(DEFAULT_BRIEFING);
+        setEditText(DEFAULT_BRIEFING);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await setDoc(doc(db, 'agent_config', 'cowork_briefing'), {
+        content: editText,
+        updatedAt: serverTimestamp(),
+      });
+      setContent(editText);
+      setEditing(false);
+    } catch (err) {
+      console.error('Save briefing failed:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(content).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <FileText size={16} className="text-violet-600" />
+            <span className="text-sm font-bold text-slate-800">Cowork Briefing</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest bg-violet-50 text-violet-600 px-2 py-0.5 rounded">paste first</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleCopy}
+              className="h-7 px-3 text-[10px] font-bold uppercase tracking-widest gap-1.5"
+            >
+              {copied ? <CheckCircle2 size={11} className="text-emerald-600" /> : <Copy size={11} />}
+              {copied ? 'Copied!' : 'Copy'}
+            </Button>
+            {editing ? (
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={saving}
+                className="h-7 px-3 text-[10px] font-bold uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+              >
+                {saving ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
+                Save
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setEditing(true)}
+                className="h-7 px-3 text-[10px] font-bold uppercase tracking-widest gap-1.5"
+              >
+                <Pencil size={11} />
+                Edit
+              </Button>
+            )}
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors text-slate-400 hover:text-slate-600">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {loading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-3 bg-slate-100 animate-pulse rounded" />)}
+            </div>
+          ) : editing ? (
+            <textarea
+              className="w-full h-full min-h-[500px] text-xs font-mono p-3 border border-slate-200 rounded-lg resize-none focus:outline-none focus:ring-1 focus:ring-violet-300 text-slate-700 bg-slate-50 leading-relaxed"
+              value={editText}
+              onChange={e => setEditText(e.target.value)}
+            />
+          ) : (
+            <pre className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap font-mono">{content}</pre>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-3 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
+          <p className="text-[11px] text-slate-400">Paste this into a new Cowork chat before your task prompt. Claude will confirm it has read the briefing, then you follow up with the specific task.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function GrowthDashboard() {
   const [runs, setRuns]                   = useState<AgentRun[]>([]);
   const [activeRunId, setActiveRunId]     = useState<string | null>(null);
@@ -144,6 +359,7 @@ export default function GrowthDashboard() {
   const [expandedKnowledge, setExpandedKnowledge] = useState(false);
   const [runningAnalysis, setRunningAnalysis] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [briefingOpen, setBriefingOpen] = useState(false);
 
   // Load last 3 runs + knowledge
   useEffect(() => {
@@ -333,9 +549,20 @@ export default function GrowthDashboard() {
             {runningAnalysis ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
             {runningAnalysis ? 'Analysing…' : 'Run Analysis Now'}
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setBriefingOpen(true)}
+            className="h-7 text-xs gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50"
+          >
+            <FileText size={12} />
+            Cowork Briefing
+          </Button>
           {analysisError && <span className="text-xs text-red-600">{analysisError}</span>}
         </div>
       </div>
+
+      {briefingOpen && <CoworkBriefingModal onClose={() => setBriefingOpen(false)} />}
 
       {/* Run tabs */}
       {!loading && runs.length > 0 && (
