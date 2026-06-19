@@ -83,8 +83,10 @@ interface AgentKnowledge {
   id: string;
   topic: string;
   fact: string;
+  content?: string;
   source?: string;
   confidence?: string;
+  category?: string;
   createdAt?: { toDate: () => Date };
 }
 
@@ -298,6 +300,19 @@ export default function GrowthDashboard() {
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <p className="text-sm text-slate-500">On-demand marketing analysis — last 7 days of data.</p>
+          {/* Platform logos */}
+          <div className="flex items-center gap-2 mt-2">
+            {[
+              { name: 'Google Analytics 4', url: 'https://www.gstatic.com/images/branding/product/2x/analytics_64dp.png' },
+              { name: 'Google Search Console', url: 'https://ssl.gstatic.com/search-console/scfe/search_console-512.png' },
+              { name: 'Bing Webmaster Tools', url: 'https://www.bing.com/sa/simg/favicon-2x.ico' },
+              { name: 'Firebase Enquiries', url: 'https://www.gstatic.com/devrel-devsite/prod/v870e76d9f97e45d52a76c3fd3dff03e8bdb8e6019af4ee/firebase/images/touchicon-180.png' },
+            ].map(p => (
+              <div key={p.name} title={p.name} className="w-7 h-7 rounded-lg bg-white border border-slate-100 shadow-sm flex items-center justify-center overflow-hidden">
+                <img src={p.url} alt={p.name} className="w-5 h-5 object-contain" />
+              </div>
+            ))}
+          </div>
           <Button
             size="sm"
             variant="outline"
@@ -683,8 +698,8 @@ export default function GrowthDashboard() {
               <div key={entry.id} className="px-6 py-4 hover:bg-slate-50/50 transition-colors">
                 <div className="flex items-start gap-3">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{entry.topic}</span>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs font-bold text-slate-700">{entry.topic}</span>
                       {entry.confidence && (
                         <span className={cn('text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded',
                           entry.confidence === 'high' ? 'bg-emerald-50 text-emerald-600' :
@@ -694,9 +709,21 @@ export default function GrowthDashboard() {
                           {entry.confidence}
                         </span>
                       )}
+                      {entry.category && (
+                        <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">
+                          {entry.category}
+                        </span>
+                      )}
                     </div>
-                    <p className="text-sm text-slate-700">{entry.fact}</p>
-                    {entry.source && <p className="text-[10px] text-slate-400 mt-1">Source: {entry.source}</p>}
+                    {/* Summary */}
+                    <p className="text-xs font-medium text-slate-500 bg-slate-50 rounded px-2.5 py-1.5 mb-2 leading-relaxed border-l-2 border-slate-200">
+                      {entry.fact}
+                    </p>
+                    {/* Full report */}
+                    {entry.content && entry.content.length > (entry.fact?.length ?? 0) && (
+                      <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{entry.content}</p>
+                    )}
+                    {entry.source && <p className="text-[10px] text-slate-400 mt-2">Source: {entry.source}</p>}
                   </div>
                   {entry.createdAt && (
                     <span className="shrink-0 text-[10px] font-mono text-slate-300">{format(entry.createdAt.toDate(), 'MMM d')}</span>
