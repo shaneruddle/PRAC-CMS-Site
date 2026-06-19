@@ -535,13 +535,13 @@ export default function GrowthDashboard() {
           {/* Platform logos */}
           <div className="flex items-center gap-2 mt-2">
             {[
-              { name: 'Google Analytics 4', url: 'https://www.gstatic.com/images/branding/product/2x/analytics_64dp.png' },
-              { name: 'Google Search Console', url: 'https://ssl.gstatic.com/search-console/scfe/search_console-512.png' },
-              { name: 'Bing Webmaster Tools', url: 'https://www.bing.com/sa/simg/favicon-2x.ico' },
-              { name: 'Firebase Enquiries', url: 'https://www.gstatic.com/devrel-devsite/prod/v870e76d9f97e45d52a76c3fd3dff03e8bdb8e6019af4ee/firebase/images/touchicon-180.png' },
+              { name: 'Google Analytics 4',    url: 'https://cdn.simpleicons.org/googleanalytics' },
+              { name: 'Google Search Console', url: 'https://cdn.simpleicons.org/googlesearchconsole' },
+              { name: 'Bing Webmaster Tools',  url: 'https://cdn.simpleicons.org/microsoftbing' },
+              { name: 'Firebase Enquiries',    url: 'https://cdn.simpleicons.org/firebase' },
             ].map(p => (
-              <div key={p.name} title={p.name} className="w-7 h-7 rounded-lg bg-white border border-slate-100 shadow-sm flex items-center justify-center overflow-hidden">
-                <img src={p.url} alt={p.name} className="w-5 h-5 object-contain" />
+              <div key={p.name} title={p.name} className="w-7 h-7 rounded-lg bg-white border border-slate-100 shadow-sm flex items-center justify-center overflow-hidden p-1">
+                <img src={p.url} alt={p.name} className="w-full h-full object-contain" />
               </div>
             ))}
           </div>
