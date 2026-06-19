@@ -47,7 +47,17 @@ interface AgentRunAction {
   action: string;
   reasoning: string;
   isCarryOver?: boolean;
+  skill_name?: string | null;
 }
+
+const SKILLS_REGISTRY = [
+  { name: 'pattaya-rentacar-location-page',        category: 'content',    description: 'SEO area landing pages',              status: 'active'  as const },
+  { name: 'pattaya-rentacar-vehicle-guide',         category: 'content',    description: 'Vehicle / fleet SEO guides',           status: 'active'  as const },
+  { name: 'pattaya-car-rental-google-ads-optimizer',category: 'ads',        description: 'Google Ads optimisation',              status: 'active'  as const },
+  { name: 'pattaya-seo-onpage',                     category: 'seo',        description: 'On-page fixes (meta, schema, titles)', status: 'planned' as const },
+  { name: 'pattaya-conversion',                     category: 'conversion', description: 'Booking flow & CRO',                   status: 'planned' as const },
+  { name: 'pattaya-technical',                      category: 'technical',  description: 'Technical fixes',                      status: 'planned' as const },
+];
 
 interface SearchConsoleData {
   topQueries: { query: string; clicks: number; impressions: number; ctr: number; position: number }[];
@@ -565,6 +575,11 @@ export default function GrowthDashboard() {
                           carry-over
                         </span>
                       )}
+                      {action.skill_name && (
+                        <span title={`Cowork skill: ${action.skill_name}`} className="text-[9px] font-bold tracking-wide px-2 py-0.5 rounded border bg-violet-50 text-violet-700 border-violet-200 text-center truncate max-w-[90px]">
+                          {action.skill_name.replace('pattaya-', '')}
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex-1 min-w-0">
@@ -664,6 +679,30 @@ export default function GrowthDashboard() {
             })}
           </div>
         )}
+      </div>
+
+      {/* Skills registry */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex items-center gap-2">
+          <Zap size={14} className="text-slate-500" />
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Cowork Skills</span>
+        </div>
+        <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {SKILLS_REGISTRY.map(skill => (
+            <div key={skill.name} className={cn('rounded-lg border p-3', skill.status === 'active' ? 'border-emerald-100 bg-emerald-50/50' : 'border-slate-100 bg-slate-50/50')}>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <span className={cn('text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded', skill.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-50 text-amber-600')}>
+                  {skill.status === 'active' ? 'Active' : 'Planned'}
+                </span>
+                <span className={cn('text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded', CHANNEL_CLASS[skill.category] ?? 'bg-slate-100 text-slate-600')}>
+                  {skill.category}
+                </span>
+              </div>
+              <p className="text-xs font-semibold text-slate-700 mb-0.5">{skill.name.replace('pattaya-', '')}</p>
+              <p className="text-[11px] text-slate-500">{skill.description}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Knowledge base */}
