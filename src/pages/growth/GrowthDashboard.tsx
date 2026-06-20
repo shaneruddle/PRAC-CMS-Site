@@ -39,6 +39,9 @@ import {
   X,
   Pencil,
   Save,
+  BarChart2,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -71,6 +74,28 @@ interface SearchConsoleData {
   totalImpressions: number;
   avgPosition: number;
   error?: string;
+}
+
+interface Ga4Channel {
+  channel: string;
+  sessions: number;
+  newUsers: number;
+  bounceRate: number;
+  engagementRate: number;
+}
+
+interface Ga4Page {
+  pagePath: string;
+  sessions: number;
+  pageViews: number;
+  bounceRate: number;
+}
+
+interface Ga4Data {
+  period: { startDate: string; endDate: string };
+  channels: Ga4Channel[];
+  topPages: Ga4Page[];
+  totals: { sessions: number; newUsers: number };
 }
 
 interface AgentRun {
@@ -225,6 +250,17 @@ Pattaya Rent a Car (pattayarentacar.com) — car rental in Pattaya, Thailand. Ow
 Once you have read and understood everything above, reply with: **"Briefing read. Ready for task."**
 `;
 
+function DeltaBadge({ delta, inverse = false }: { delta: { value: number; pct: number } | null; inverse?: boolean }) {
+  if (!delta || delta.value === 0) return <span className="text-[10px] text-slate-300 font-mono">—</span>;
+  const positive = inverse ? delta.value < 0 : delta.value > 0;
+  return (
+    <span className={cn('flex items-center gap-0.5 text-[10px] font-bold', positive ? 'text-emerald-600' : 'text-red-500')}>
+      {positive ? <ArrowUp size={9} /> : <ArrowDown size={9} />}
+      {Math.abs(delta.pct)}%
+    </span>
+  );
+}
+
 function CoworkBriefingModal({ onClose }: { onClose: () => void }) {
   const [content, setContent]     = useState<string>('');
   const [editing, setEditing]     = useState(false);
@@ -359,7 +395,14 @@ export default function GrowthDashboard() {
   const [expandedKnowledge, setExpandedKnowledge] = useState(false);
   const [runningAnalysis, setRunningAnalysis] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
-  const [briefingOpen, setBriefingOpen] = useState(false);
+  const [briefingOpen, setBriefingOpen]       = useState(false);
+  const [ga4, setGa4]                         = useState<Ga4Data | null>(null);
+  const [ga4Loading, setGa4Loading]           = useState(true);
+  const [ga4Error, setGa4Error]               = useState<string | null>(null);
+  const [gscTab, setGscTab]                   = useState<'queries' | 'pages'>('queries');
+  const [kbSearch, setKbSearch]               = useState('');
+  const [ignoringIndex, setIgnoringIndex]     = useState<number | null>(null);
+  const [retryingIndex, setRetryingIndex]     = useState<number | null>(null);
 
   // Load last 3 runs + knowledge
   useEffect(() => {
@@ -406,6 +449,29 @@ export default function GrowthDashboard() {
     return unsub;
   }, []);
 
+
+  // Fetch GA4 data once on mount — rolling 28-day window, not per-run
+  useEffect(() => {
+    async function fetchGa4() {
+      try {
+        const user = auth.currentUser;
+        if (!user) { setGa4Loading(false); return; }
+        const token = await user.getIdToken();
+        const res = await fetch(`${BACKEND_URL}/api/ga4/performance`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error(`GA4 HTTP ${res.status}`);
+        const data: Ga4Data = await res.json();
+        setGa4(data);
+      } catch (err: any) {
+        setGa4Error(err.message || 'GA4 unavailable');
+      } finally {
+        setGa4Loading(false);
+      }
+    }
+    fetchGa4();
+  }, []);
+
   // Reset task state when switching run tabs
   const handleSelectRun = useCallback((runId: string) => {
     setActiveRunId(runId);
@@ -444,7 +510,11 @@ export default function GrowthDashboard() {
     }
   }, [activeRunId]);
 
-  const handleIgnore = useCallback(async (action: AgentRunAction) => {
+  const handleIgnore = useCallback((action: AgentRunAction) => {
+    setIgnoringIndex(action.index);
+  }, []);
+
+  const handleIgnoreWithReason = useCallback(async (action: AgentRunAction, reason: string) => {
     if (!activeRunId) return;
     try {
       await setDoc(doc(db, 'agent_tasks', `${activeRunId}-${action.index}`), {
@@ -454,10 +524,47 @@ export default function GrowthDashboard() {
         channel: action.category,
         priority: action.priority,
         status: 'ignored',
-        approvedAt: serverTimestamp(),
+        ignoreReason: reason,
+        ignoredAt: serverTimestamp(),
       });
+      // Feed into knowledge so the agent stops recommending it
+      await addDoc(collection(db, 'agent_knowledge'), {
+        topic: `Ignored: ${action.action.slice(0, 60)}`,
+        category: action.category,
+        content: `Action was ignored. Reason: ${reason}. Full action: ${action.action}`,
+        fact: `Ignored (${reason}): ${action.action.slice(0, 200)}`,
+        source: 'ignored-action',
+        confidence: 'medium',
+        runId: activeRunId,
+        createdAt: serverTimestamp(),
+      });
+      setIgnoringIndex(null);
     } catch (err) {
       console.error('Ignore failed:', err);
+    }
+  }, [activeRunId]);
+
+  const handleRetry = useCallback(async (action: AgentRunAction) => {
+    if (!activeRunId) return;
+    setRetryingIndex(action.index);
+    try {
+      const taskId = `${activeRunId}-${action.index}`;
+      await updateDoc(doc(db, 'agent_tasks', taskId), {
+        status: 'queued',
+        error: null,
+        retryAt: serverTimestamp(),
+      });
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) throw new Error('Not authenticated');
+      fetch(EXECUTOR_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ taskId }),
+      }).catch(err => console.error('Retry executor call failed:', err));
+    } catch (err) {
+      console.error('Retry failed:', err);
+    } finally {
+      setRetryingIndex(null);
     }
   }, [activeRunId]);
 
@@ -520,6 +627,32 @@ export default function GrowthDashboard() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   const gsc = activeRun?.searchConsole;
+
+  // Week-over-week deltas: compare active run to the immediately previous run
+  const prevRun = runs.find(r => r.id !== activeRunId);
+  const prevGsc = prevRun?.searchConsole;
+  const computeDelta = (curr: number, prev: number | undefined) => {
+    if (prev === undefined || prev === 0) return null;
+    const diff = curr - prev;
+    return { value: diff, pct: Math.round((diff / prev) * 100) };
+  };
+  const clicksDelta      = gsc && prevGsc ? computeDelta(gsc.totalClicks, prevGsc.totalClicks) : null;
+  const impressionsDelta = gsc && prevGsc ? computeDelta(gsc.totalImpressions, prevGsc.totalImpressions) : null;
+  const positionDelta    = gsc && prevGsc ? computeDelta(gsc.avgPosition, prevGsc.avgPosition) : null;
+
+  // Carry-over aging: count how many of the other loaded runs also flagged this action
+  const carryOverWeeks = (actionText: string) =>
+    runs.filter(r => r.id !== activeRunId && r.actions.some(a => a.isCarryOver && a.action === actionText)).length + 1;
+
+  // Knowledge search filter
+  const filteredKnowledge = kbSearch.trim()
+    ? knowledge.filter(e =>
+        e.topic?.toLowerCase().includes(kbSearch.toLowerCase()) ||
+        e.fact?.toLowerCase().includes(kbSearch.toLowerCase()) ||
+        e.content?.toLowerCase().includes(kbSearch.toLowerCase()) ||
+        e.category?.toLowerCase().includes(kbSearch.toLowerCase())
+      )
+    : knowledge;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -677,11 +810,27 @@ export default function GrowthDashboard() {
       {/* Search Console panel */}
       {(loading || gsc) && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex items-center gap-2">
-            <Search size={14} className="text-slate-500" />
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">
-              Google Search Console{activeRun ? ` — ${activeRun.period.start} to ${activeRun.period.end}` : ''}
-            </span>
+          <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <Search size={14} className="text-slate-500" />
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">
+                Google Search Console{activeRun ? ` — ${activeRun.period.start} to ${activeRun.period.end}` : ''}
+              </span>
+            </div>
+            <div className="flex items-center gap-1 bg-white border border-slate-100 rounded-lg p-0.5">
+              <button
+                onClick={() => setGscTab('queries')}
+                className={cn('text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-md transition-colors', gscTab === 'queries' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-600')}
+              >
+                Queries
+              </button>
+              <button
+                onClick={() => setGscTab('pages')}
+                className={cn('text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-md transition-colors', gscTab === 'pages' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-600')}
+              >
+                Pages
+              </button>
+            </div>
           </div>
           {loading ? (
             <div className="p-6 space-y-3">
@@ -717,7 +866,7 @@ export default function GrowthDashboard() {
                   <p className="text-xl font-bold text-slate-800">{gsc.avgPosition}</p>
                 </div>
               </div>
-              {gsc.topQueries.length > 0 && (
+              {gscTab === 'queries' && gsc.topQueries.length > 0 && (
                 <div>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Top Queries</p>
                   <div className="rounded-lg border border-slate-100 overflow-hidden">
@@ -754,10 +903,123 @@ export default function GrowthDashboard() {
                   </div>
                 </div>
               )}
+              {gscTab === 'pages' && (
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Top Pages</p>
+                  {(!gsc.topPages || gsc.topPages.length === 0) ? (
+                    <p className="text-xs text-slate-400">No page data in this run.</p>
+                  ) : (
+                    <div className="rounded-lg border border-slate-100 overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-100">
+                            <th className="text-left px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Page</th>
+                            <th className="text-right px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Clicks</th>
+                            <th className="text-right px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Impr</th>
+                            <th className="text-right px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">CTR</th>
+                            <th className="text-right px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pos</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                          {gsc.topPages.slice(0, 10).map((p, i) => (
+                            <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="px-4 py-2 text-slate-700 font-medium max-w-[240px] truncate" title={p.page}>{p.page}</td>
+                              <td className="px-3 py-2 text-right text-slate-600 font-mono">{p.clicks}</td>
+                              <td className="px-3 py-2 text-right text-slate-400 font-mono">{p.impressions.toLocaleString()}</td>
+                              <td className="px-3 py-2 text-right text-slate-400 font-mono">{(p.ctr * 100).toFixed(1)}%</td>
+                              <td className="px-4 py-2 text-right font-mono">
+                                <span className={cn('px-1.5 py-0.5 rounded text-[10px] font-bold',
+                                  p.position <= 3 ? 'bg-emerald-50 text-emerald-700' :
+                                  p.position <= 10 ? 'bg-amber-50 text-amber-700' :
+                                  'bg-slate-100 text-slate-500'
+                                )}>
+                                  {p.position}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ) : null}
         </div>
       )}
+
+
+      {/* GA4 Panel — rolling 28-day window */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <BarChart2 size={14} className="text-slate-500" />
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">
+              Google Analytics 4{ga4 ? ` — ${ga4.period.startDate} to ${ga4.period.endDate}` : ''}
+            </span>
+          </div>
+          <span className="text-[10px] font-bold text-slate-300">28-day rolling</span>
+        </div>
+        {ga4Loading ? (
+          <div className="p-6 space-y-3">
+            {[1, 2, 3].map(i => <div key={i} className="h-3 bg-slate-50 animate-pulse rounded" />)}
+          </div>
+        ) : ga4Error ? (
+          <div className="px-6 py-5 flex items-center gap-2 text-red-600">
+            <AlertCircle size={14} />
+            <p className="text-xs">GA4 error: {ga4Error}</p>
+          </div>
+        ) : ga4 ? (
+          <div className="p-6 space-y-5">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-slate-50 rounded-lg p-3 text-center">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Sessions</p>
+                <p className="text-xl font-bold text-slate-800">{ga4.totals.sessions.toLocaleString()}</p>
+              </div>
+              <div className="bg-slate-50 rounded-lg p-3 text-center">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">New Users</p>
+                <p className="text-xl font-bold text-slate-800">{ga4.totals.newUsers.toLocaleString()}</p>
+              </div>
+            </div>
+            {ga4.channels.length > 0 && (
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Sessions by Channel</p>
+                <div className="rounded-lg border border-slate-100 overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-100">
+                        <th className="text-left px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Channel</th>
+                        <th className="text-right px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sessions</th>
+                        <th className="text-right px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">New Users</th>
+                        <th className="text-right px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Bounce</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {ga4.channels.map((c, i) => (
+                        <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="px-4 py-2 text-slate-700 font-medium">{c.channel}</td>
+                          <td className="px-3 py-2 text-right text-slate-600 font-mono">{c.sessions.toLocaleString()}</td>
+                          <td className="px-3 py-2 text-right text-slate-400 font-mono">{c.newUsers.toLocaleString()}</td>
+                          <td className="px-4 py-2 text-right font-mono">
+                            <span className={cn('px-1.5 py-0.5 rounded text-[10px] font-bold',
+                              c.bounceRate < 0.4 ? 'bg-emerald-50 text-emerald-700' :
+                              c.bounceRate < 0.7 ? 'bg-amber-50 text-amber-700' :
+                              'bg-red-50 text-red-600'
+                            )}>
+                              {(c.bounceRate * 100).toFixed(0)}%
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null}
+      </div>
 
       {/* Actions */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -804,11 +1066,14 @@ export default function GrowthDashboard() {
                       <span className={cn('text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border', priorityCfg.className)}>
                         {priorityCfg.label}
                       </span>
-                      {action.isCarryOver && (
-                        <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200 text-center">
-                          carry-over
-                        </span>
-                      )}
+                      {action.isCarryOver && (() => {
+                        const wks = carryOverWeeks(action.action);
+                        return (
+                          <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200 text-center">
+                            {wks > 1 ? `${wks}w carry-over` : 'carry-over'}
+                          </span>
+                        );
+                      })()}
                       {action.skill_name && (
                         <span title={`Cowork skill: ${action.skill_name}`} className="text-[9px] font-bold tracking-wide px-2 py-0.5 rounded border bg-violet-50 text-violet-700 border-violet-200 text-center truncate max-w-[90px]">
                           {action.skill_name.replace('pattaya-', '')}
@@ -878,9 +1143,51 @@ export default function GrowthDashboard() {
                       </span>
 
                       {task ? (
-                        <div className={cn('flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold', statusCfg?.className)}>
-                          {StatusIcon && <StatusIcon size={11} className={(statusCfg as any)?.spin ? 'animate-spin' : ''} />}
-                          {statusCfg?.label}
+                        <div className="flex flex-col items-end gap-1">
+                          <div className={cn('flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold', statusCfg?.className)}>
+                            {StatusIcon && <StatusIcon size={11} className={(statusCfg as any)?.spin ? 'animate-spin' : ''} />}
+                            {statusCfg?.label}
+                          </div>
+                          {task.status === 'failed' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-6 px-2 text-[9px] font-bold uppercase tracking-widest border-slate-200 text-slate-500 hover:text-slate-700 gap-1"
+                              onClick={() => handleRetry(action)}
+                              disabled={retryingIndex === action.index}
+                            >
+                              {retryingIndex === action.index
+                                ? <Loader2 size={9} className="animate-spin" />
+                                : <RotateCcw size={9} />}
+                              Retry
+                            </Button>
+                          )}
+                        </div>
+                      ) : ignoringIndex === action.index ? (
+                        <div className="flex flex-col gap-1.5 items-end">
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Why ignore?</p>
+                          <div className="flex flex-wrap gap-1 justify-end max-w-[180px]">
+                            {[
+                              { value: 'already_done', label: 'Already done' },
+                              { value: 'not_relevant',  label: 'Not relevant' },
+                              { value: 'too_risky',     label: 'Too risky' },
+                              { value: 'defer',         label: 'Defer' },
+                            ].map(r => (
+                              <button
+                                key={r.value}
+                                onClick={() => handleIgnoreWithReason(action, r.value)}
+                                className="text-[9px] font-bold px-2 py-0.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors"
+                              >
+                                {r.label}
+                              </button>
+                            ))}
+                            <button
+                              onClick={() => setIgnoringIndex(null)}
+                              className="text-[9px] font-bold px-2 py-0.5 rounded border border-slate-200 text-slate-400 hover:bg-slate-50 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <div className="flex items-center gap-1">
@@ -941,15 +1248,27 @@ export default function GrowthDashboard() {
 
       {/* Knowledge base */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2">
             <BookOpen size={14} className="text-slate-500" />
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Agent Knowledge Base</span>
           </div>
-          <button onClick={() => setExpandedKnowledge(v => !v)} className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-slate-600 transition-colors">
-            {expandedKnowledge ? 'Show less' : `Show all ${knowledge.length}`}
-            {expandedKnowledge ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-          </button>
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search…"
+                value={kbSearch}
+                onChange={e => setKbSearch(e.target.value)}
+                className="pl-6 pr-2 py-1 text-[11px] border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-slate-300 w-36 text-slate-700 placeholder:text-slate-300"
+              />
+            </div>
+            <button onClick={() => setExpandedKnowledge(v => !v)} className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-slate-600 transition-colors whitespace-nowrap">
+              {expandedKnowledge ? 'Show less' : `Show all ${knowledge.length}`}
+              {expandedKnowledge ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            </button>
+          </div>
         </div>
         {loading ? (
           <div className="divide-y divide-slate-50">
@@ -967,7 +1286,7 @@ export default function GrowthDashboard() {
           </div>
         ) : (
           <div className="divide-y divide-slate-50">
-            {(expandedKnowledge ? knowledge : knowledge.slice(0, 5)).map(entry => (
+            {(expandedKnowledge ? filteredKnowledge : filteredKnowledge.slice(0, 5)).map(entry => (
               <div key={entry.id} className="px-6 py-4 hover:bg-slate-50/50 transition-colors">
                 <div className="flex items-start gap-3">
                   <div className="flex-1 min-w-0">
