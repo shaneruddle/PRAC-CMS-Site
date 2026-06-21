@@ -63,7 +63,7 @@ const SKILLS_REGISTRY = [
   { name: 'pattaya-rentacar-vehicle-guide',         category: 'content',    description: 'Vehicle / fleet SEO guides',           status: 'active'  as const },
   { name: 'pattaya-car-rental-google-ads-optimizer',category: 'ads',        description: 'Google Ads optimisation',              status: 'active'  as const },
   { name: 'pattaya-seo-onpage',                     category: 'seo',        description: 'On-page fixes (meta, schema, titles)', status: 'active'  as const },
-  { name: 'pattaya-conversion',                     category: 'conversion', description: 'Booking flow & CRO',                   status: 'planned' as const },
+  { name: 'pattaya-conversion',                     category: 'conversion', description: 'Booking flow & CRO',                   status: 'active'  as const },
   { name: 'pattaya-technical',                      category: 'technical',  description: 'Technical fixes',                      status: 'active'  as const },
 ];
 
